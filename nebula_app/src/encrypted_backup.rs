@@ -353,6 +353,11 @@ fn add_sanitized_ssh(root: &Path, entries: &mut Vec<BackupEntry>) -> Result<(), 
             if let Some(object) = profile.as_object_mut() {
                 object.remove("private_keys");
                 object.remove("proxy");
+                if let Some(connection) =
+                    object.get_mut("connection").and_then(serde_json::Value::as_object_mut)
+                {
+                    connection.remove("jump_private_keys");
+                }
             }
         }
     }
@@ -512,7 +517,12 @@ fn ssh_is_sanitized(bytes: &[u8]) -> bool {
     value.get("profiles").and_then(serde_json::Value::as_array).is_none_or(|profiles| {
         profiles.iter().all(|profile| {
             profile.as_object().is_none_or(|object| {
-                !object.contains_key("private_keys") && !object.contains_key("proxy")
+                !object.contains_key("private_keys")
+                    && !object.contains_key("proxy")
+                    && object
+                        .get("connection")
+                        .and_then(serde_json::Value::as_object)
+                        .is_none_or(|connection| !connection.contains_key("jump_private_keys"))
             })
         })
     })
@@ -546,6 +556,22 @@ mod tests {
 
         let empty = BackupSelection { appearance: false, ..selection };
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn ssh_backups_exclude_target_and_jump_key_paths() {
+        let directory = tempdir().unwrap();
+        let input = br#"{"profiles":[{"destination":"target","private_keys":["target-key"],"connection":{"jump_mode":"host","jump_host":"bastion","jump_private_keys":["jump-key"]}}]}"#;
+        assert!(!ssh_is_sanitized(input));
+        fs::write(directory.path().join("ssh_profiles.json"), input).unwrap();
+        let mut entries = Vec::new();
+        add_sanitized_ssh(directory.path(), &mut entries).unwrap();
+        assert!(ssh_is_sanitized(&entries[0].bytes));
+        let value: serde_json::Value = serde_json::from_slice(&entries[0].bytes).unwrap();
+        assert_eq!(value["profiles"][0]["connection"]["jump_host"], "bastion");
+        let serialized = String::from_utf8(entries[0].bytes.clone()).unwrap();
+        assert!(!serialized.contains("target-key"));
+        assert!(!serialized.contains("jump-key"));
     }
 
     #[test]

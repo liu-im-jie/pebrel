@@ -237,6 +237,18 @@
       "backup_secret": "Credentials are stored only in the system credential manager"
     },
     "ssh": {
+      "jump_auth": "Jump host authentication",
+      "jump_auth_inherit": "Inherit",
+      "jump_auth_password": "Password",
+      "jump_auth_key": "Private key",
+      "jump_password": "Jump host password",
+      "jump_clear_password": "Remove saved jump host password",
+      "jump_password_placeholder": "Leave empty to keep the saved password",
+      "jump_store_unavailable": "The system credential store is unavailable; the jump host password cannot be saved.",
+      "jump_save_failed": "Host details were saved, but the jump host password could not be updated: {error}",
+      "jump_private_keys": "Jump host private keys",
+      "choose_private_key": "Choose private key",
+      "remove_private_key": "Remove private key",
       "default_keys": "If unspecified, IdentityFile and the default id_* private keys are used.",
       "address_hint": "Supports user@host; you can also paste ssh://host:2222",
       "auth_auto_description": "Tries available private keys first, then asks for a password. This is the best choice in most cases.",

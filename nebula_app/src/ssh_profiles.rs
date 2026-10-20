@@ -11,7 +11,7 @@ pub(crate) mod exchange;
 #[path = "ssh_profiles/organization.rs"]
 mod organization;
 pub(crate) use connection::validate_ssh_destination;
-pub use connection::{SshConnectionOptions, SshHostJumpMode, SshHostProxyMode};
+pub use connection::{SshConnectionOptions, SshHostJumpMode, SshHostProxyMode, SshJumpAuthMode};
 pub(crate) use organization::{HostOrganization, merge_host_sources};
 
 const PROFILE_VERSION: u32 = 1;
@@ -394,14 +394,20 @@ mod tests {
         source.connection.proxy_mode = super::SshHostProxyMode::Socks5;
         source.connection.proxy_host = "proxy".into();
         source.connection.proxy_username = "user".into();
+        source.connection.jump_mode = super::SshHostJumpMode::Host;
+        source.connection.jump_host = "jump@bastion".into();
+        source.connection.jump_auth = Some(super::SshJumpAuthMode::Password);
         let proxy_key = source.connection.proxy_credential_target("root@host").unwrap();
         let copied_proxy_key = source.connection.proxy_credential_target("copy-a").unwrap();
+        let jump_key = source.connection.jump_credential_target("root@host").unwrap();
+        let copied_jump_key = source.connection.jump_credential_target("copy-a").unwrap();
         profiles.upsert(source);
         profiles.save(&path).unwrap();
         let stale = profiles.clone();
         let original = HashMap::from([
             (credential_target("root@host"), b"password".to_vec()),
             (proxy_key, b"proxy-secret".to_vec()),
+            (jump_key, b"jump-secret".to_vec()),
         ]);
         let secrets = RefCell::new(original.clone());
         let copy = |profiles, identity| {
@@ -424,12 +430,15 @@ mod tests {
         let (updated, _) = copy(profiles, "copy-a").unwrap();
         assert_eq!(secrets.borrow()[&credential_target("copy-a")], b"password");
         assert_eq!(secrets.borrow()[&copied_proxy_key], b"proxy-secret");
+        assert_eq!(secrets.borrow()[&copied_jump_key], b"jump-secret");
         let saved = std::fs::read(&path).unwrap();
         let credentials = secrets.borrow().clone();
         assert!(copy(stale, "copy-b").is_err(), "stale writes must not overwrite another copy");
         assert_eq!(*secrets.borrow(), credentials);
         assert_eq!(std::fs::read(&path).unwrap(), saved);
-        assert!(!String::from_utf8(saved).unwrap().contains("proxy-secret"));
+        let saved = String::from_utf8(saved).unwrap();
+        assert!(!saved.contains("proxy-secret"));
+        assert!(!saved.contains("jump-secret"));
         assert_eq!(updated.connection_destination("copy-a"), "root@host");
         for (key, value) in original {
             assert_eq!(secrets.borrow()[&key], value);

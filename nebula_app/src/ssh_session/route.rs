@@ -1,4 +1,6 @@
-use crate::ssh_profiles::{SshHostJumpMode, SshHostProxyMode, SshProfileAuth};
+use crate::ssh_profiles::{
+    SshAuthMode, SshHostJumpMode, SshHostProxyMode, SshJumpAuthMode, SshProfileAuth,
+};
 use crate::ssh_proxy::{ProxyLink, ProxyMode, ProxyScheme, ProxyServer, SshProxyConfig};
 
 use super::SshDestination;
@@ -7,8 +9,41 @@ pub(super) struct ResolvedRoute {
     pub destination: SshDestination,
     pub profile: SshProfileAuth,
     pub transport: RouteTransport,
+    pub password: RoutePassword,
     #[cfg(test)]
     pub known_hosts_path: Option<std::path::PathBuf>,
+}
+
+#[derive(Default)]
+pub(super) struct RoutePassword {
+    pub target: Option<String>,
+    pub draft: Option<zeroize::Zeroizing<String>>,
+}
+
+impl RoutePassword {
+    pub fn load(&self, destination: &str) -> std::io::Result<Option<Vec<u8>>> {
+        if let Some(draft) = &self.draft {
+            return Ok((!draft.is_empty()).then(|| draft.as_bytes().to_vec()));
+        }
+        match &self.target {
+            Some(target) => crate::ssh_credentials::load_generic_secret(target),
+            None => crate::ssh_credentials::load_stored_password(destination),
+        }
+    }
+
+    pub fn store(&self, destination: &str, password: &[u8]) -> std::io::Result<()> {
+        match &self.target {
+            Some(target) => crate::ssh_credentials::store_generic_secret(target, password),
+            None => crate::ssh_credentials::store_password(destination, password),
+        }
+    }
+
+    pub fn forget(&self, destination: &str) -> std::io::Result<()> {
+        match &self.target {
+            Some(target) => crate::ssh_credentials::delete_generic_secret(target),
+            None => crate::ssh_credentials::forget_password(destination),
+        }
+    }
 }
 
 pub(super) enum RouteTransport {
@@ -25,6 +60,14 @@ enum NetworkOverride {
 }
 
 impl ResolvedRoute {
+    pub fn set_jump_password(&mut self, draft: Option<zeroize::Zeroizing<String>>) {
+        if self.profile.connection.jump_credential_target(&self.profile.destination).is_some() {
+            if let RouteTransport::Jump(jump) = &mut self.transport {
+                jump.password.draft = draft;
+            }
+        }
+    }
+
     pub fn pool_key(&self) -> String {
         use sha2::{Digest, Sha256};
         use std::fmt::Write as _;
@@ -38,6 +81,7 @@ impl ResolvedRoute {
                 current.profile.auth,
                 &current.profile.private_keys,
                 &current.destination.identity_files,
+                &current.password.target,
             ))
             .expect("SSH route metadata is serializable");
             digest.update((metadata.len() as u64).to_be_bytes());
@@ -178,8 +222,18 @@ fn build_route(
         if depth >= 2 {
             return Err("跳板链过深，最多支持 2 级跳板".to_owned());
         }
-        let (jump_destination, jump_profile) = resolve_host(&spec)?;
-        RouteTransport::Jump(Box::new(build_route(
+        let (jump_destination, mut jump_profile) = resolve_host(&spec)?;
+        if options.jump_mode == SshHostJumpMode::Host {
+            match options.effective_jump_auth() {
+                SshJumpAuthMode::Inherit => {},
+                SshJumpAuthMode::Password => jump_profile.auth = SshAuthMode::Password,
+                SshJumpAuthMode::PublicKey => {
+                    jump_profile.auth = SshAuthMode::PublicKey;
+                    jump_profile.private_keys = options.jump_private_keys.clone();
+                },
+            }
+        }
+        let mut jump = build_route(
             jump_destination,
             jump_profile,
             global,
@@ -189,7 +243,9 @@ fn build_route(
             ancestors,
             resolve_host,
             load_secret,
-        )?))
+        )?;
+        jump.password.target = options.jump_credential_target(&profile.destination);
+        RouteTransport::Jump(Box::new(jump))
     } else {
         match network {
             Some(NetworkOverride::Direct) => RouteTransport::Direct,
@@ -206,6 +262,7 @@ fn build_route(
         destination,
         profile,
         transport,
+        password: RoutePassword::default(),
         #[cfg(test)]
         known_hosts_path: None,
     })

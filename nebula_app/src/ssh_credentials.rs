@@ -2,6 +2,8 @@ const ASKPASS_FLAG: &str = "PEBREL_SSH_ASKPASS";
 const DESTINATION_ENV: &str = "PEBREL_SSH_DESTINATION";
 const ATTEMPT_ENV: &str = "PEBREL_SSH_ASKPASS_ATTEMPT";
 
+pub(crate) mod jump;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AskpassAction {
     UseStored,

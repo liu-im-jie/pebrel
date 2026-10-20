@@ -177,6 +177,9 @@ pub(super) fn localized_input_placeholder(
         },
         "ssh_jump_host" => language
             .pick("user@bastion:22 或 SSH config 别名", "user@bastion:22 or SSH config alias"),
+        "ssh_jump_password" => {
+            language.text(crate::i18n::Message::SettingsSshJumpPasswordPlaceholder)
+        },
         "ssh_icon_filter" => language.pick("搜索图标…", "Search icons..."),
         "font_family" => language.pick("输入字体名称", "Enter a font family"),
         "backup_password" => {

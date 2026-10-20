@@ -494,6 +494,11 @@ impl SettingsPane {
             InputState::new(window, cx)
                 .placeholder(localized_input_placeholder("ssh_jump_host", language))
         });
+        let ssh_jump_password_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .masked(true)
+                .placeholder(localized_input_placeholder("ssh_jump_password", language))
+        });
         for input in [
             ssh_library.group.clone(),
             ssh_library.tags.clone(),
@@ -508,6 +513,7 @@ impl SettingsPane {
             ssh_proxy_username_input.clone(),
             ssh_proxy_password_input.clone(),
             ssh_jump_host_input.clone(),
+            ssh_jump_password_input.clone(),
         ] {
             subscriptions.push(cx.subscribe_in(
                 &input,
@@ -698,6 +704,7 @@ impl SettingsPane {
             ssh_proxy_username_input,
             ssh_proxy_password_input,
             ssh_jump_host_input,
+            ssh_jump_password_input,
             ssh_username_picker_open: false,
             ssh_username_trigger_bounds: None,
             ssh_icon_picker_open: false,

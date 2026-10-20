@@ -15,6 +15,121 @@ fn pairing_design_ssh_auth_description_uses_metadata_not_a_saved_password_claim(
 
 #[cfg(feature = "gpui-test-support")]
 #[gpui::test]
+fn jump_key_controls_update_only_the_jump_draft(cx: &mut gpui::TestAppContext) {
+    cx.update(|cx| {
+        gpui_component::init(cx);
+        cx.set_reduce_motion(true);
+        cx.set_global(crate::gpui_shell::config::Settings::load(nebula_settings::ThemeName::Nord));
+    });
+    let mut pane = None;
+    let (_, cx) = cx.add_window_view(|window, cx| {
+        let view = cx.new(|cx| SettingsPane::new(window, cx));
+        view.update(cx, |pane, cx| {
+            let mut editor = SshEditorState::new(1, None);
+            editor.advanced = true;
+            editor.connection.jump_mode = crate::ssh_profiles::SshHostJumpMode::Host;
+            editor.connection.jump_private_keys = vec!["jump-key.pem".into()];
+            editor.private_keys = vec!["target-key.pem".into()];
+            editor.test_status = Some(super::super::SshEditorTestStatus::Succeeded(1));
+            pane.ssh_editor = Some(editor);
+            pane.ssh_jump_host_input.update(cx, |input, cx| {
+                input.set_value("jump@bastion:2222", window, cx);
+            });
+            let draft = pane.ssh_connection_from_draft("root@target", cx).unwrap();
+            assert_eq!(draft.jump_private_keys, vec![std::path::PathBuf::from("jump-key.pem")]);
+            pane.active_section = 4;
+        });
+        pane = Some(view.clone());
+        gpui_component::Root::new(view, window, cx)
+    });
+    let pane = pane.unwrap();
+    cx.simulate_resize(gpui::size(px(1000.0), px(1000.0)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("ssh-jump-add-private-key").is_some());
+    let remove = cx.debug_bounds("ssh-jump-key-remove-0").unwrap();
+    cx.simulate_click(remove.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    pane.read_with(cx, |pane, cx| {
+        let editor = pane.ssh_editor.as_ref().unwrap();
+        assert!(editor.connection.jump_private_keys.is_empty());
+        assert_eq!(editor.private_keys, vec![std::path::PathBuf::from("target-key.pem")]);
+        assert!(editor.test_status.is_none());
+        assert_eq!(editor.revision, 1);
+        assert!(
+            pane.ssh_connection_from_draft("root@target", cx).unwrap().jump_private_keys.is_empty()
+        );
+    });
+}
+
+#[cfg(feature = "gpui-test-support")]
+#[gpui::test]
+fn jump_password_controls_keep_drafts_separate_and_clear_on_close(cx: &mut gpui::TestAppContext) {
+    cx.update(|cx| {
+        gpui_component::init(cx);
+        cx.set_reduce_motion(true);
+        cx.set_global(crate::gpui_shell::config::Settings::load(nebula_settings::ThemeName::Nord));
+    });
+    let mut pane = None;
+    let (_, cx) = cx.add_window_view(|window, cx| {
+        let view = cx.new(|cx| SettingsPane::new(window, cx));
+        view.update(cx, |pane, cx| {
+            let mut editor = SshEditorState::new(1, None);
+            editor.advanced = true;
+            editor.connection.jump_mode = crate::ssh_profiles::SshHostJumpMode::Host;
+            pane.ssh_editor = Some(editor);
+            pane.ssh_jump_host_input
+                .update(cx, |input, cx| input.set_value("jump@host", window, cx));
+            pane.ssh_password_input
+                .update(cx, |input, cx| input.set_value("target-fixture", window, cx));
+            pane.active_section = 4;
+        });
+        pane = Some(view.clone());
+        gpui_component::Root::new(view, window, cx)
+    });
+    let pane = pane.unwrap();
+    cx.simulate_resize(gpui::size(px(1000.0), px(1000.0)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+    });
+    assert!(cx.debug_bounds("ssh-jump-password").is_none());
+    let password_mode = cx.debug_bounds("ssh-jump-auth-1").unwrap();
+    cx.simulate_click(password_mode.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        pane.update(cx, |pane, cx| {
+            pane.ssh_jump_password_input
+                .update(cx, |input, cx| input.set_value("jump-fixture", window, cx));
+            let options = pane.ssh_connection_from_draft("target", cx).unwrap();
+            assert_eq!(
+                options.effective_jump_auth(),
+                crate::ssh_profiles::SshJumpAuthMode::Password
+            );
+            assert_eq!(
+                pane.ssh_jump_test_password(&options, cx).unwrap().unwrap().as_str(),
+                "jump-fixture"
+            );
+            assert_eq!(pane.ssh_password_input.read(cx).value().as_ref(), "target-fixture");
+            pane.ssh_editor.as_mut().unwrap().clear_jump_password = true;
+            assert!(pane.ssh_jump_test_password(&options, cx).unwrap().unwrap().is_empty());
+            pane.ssh_jump_password_input.update(cx, |input, cx| input.set_value("", window, cx));
+            let editor = pane.ssh_editor.as_mut().unwrap();
+            editor.clear_jump_password = false;
+            editor.original_destination = Some("copy-identity".into());
+            assert!(pane.ssh_jump_test_password(&options, cx).unwrap().unwrap().is_empty());
+            pane.ssh_editor.as_mut().unwrap().original_connection.jump_host = "jump@host".into();
+            assert!(pane.ssh_jump_test_password(&options, cx).unwrap().unwrap().is_empty());
+            pane.close_ssh_editor(window, cx);
+            assert!(pane.ssh_jump_password_input.read(cx).value().is_empty());
+        });
+    });
+}
+
+#[cfg(feature = "gpui-test-support")]
+#[gpui::test]
 fn prototype_ssh_rows_keep_icon_anchors_and_compact_filter(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
         gpui_component::init(cx);

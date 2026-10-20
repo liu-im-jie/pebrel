@@ -49,6 +49,7 @@ pub(crate) async fn prepare_owned_fixture(
         profile,
         transport: route::RouteTransport::Direct,
         known_hosts_path: Some(known_hosts.to_owned()),
+        password: Default::default(),
     };
     authenticated_route(&route, None::<&NoopSshEventHost>, false, false).await?;
     Ok(())

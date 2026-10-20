@@ -562,6 +562,7 @@ impl Fixture {
             profile: crate::ssh_profiles::SshProfiles::default().for_destination(&destination),
             transport: RouteTransport::Direct,
             known_hosts_path: Some(known_hosts),
+            password: Default::default(),
         };
         Self { route, data, window_changes, task, _directory: directory }
     }
@@ -952,6 +953,7 @@ fn completion_real_ssh_git_and_project_scripts_end_to_end() {
             profile,
             transport: RouteTransport::Direct,
             known_hosts_path: Some(fixture["known_hosts"].as_str().unwrap().into()),
+            password: Default::default(),
         };
         let acquired =
             authenticated_route(&route, None::<&NoopSshEventHost>, false, false).await.unwrap();

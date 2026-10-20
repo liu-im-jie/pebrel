@@ -358,6 +358,7 @@ fn jump_and_target_rank_their_own_agent_identities() {
             profile: jump.route.profile.clone(),
             transport: RouteTransport::Direct,
             known_hosts_path: jump.route.known_hosts_path.clone(),
+            password: Default::default(),
         }));
         let agent = Agent::new(vec![
             Identity::plain(target_key.clone()),

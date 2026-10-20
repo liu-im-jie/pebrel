@@ -208,6 +208,7 @@ impl Fixture {
             destination,
             transport: RouteTransport::Direct,
             known_hosts_path: Some(known_hosts),
+            password: Default::default(),
         };
         Self { route, stats, directory, listener }
     }
@@ -221,6 +222,7 @@ impl Fixture {
             password: password.map(str::to_owned),
             connection: self.route.profile.connection.clone(),
             proxy_password: None,
+            jump_password: None,
         }
     }
 

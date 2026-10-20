@@ -29,6 +29,7 @@ use crate::gpui_shell::widgets::NebulaButton;
 
 mod advanced;
 mod editor;
+mod jump_auth;
 pub(super) mod library;
 use crate::i18n::Message;
 
@@ -38,6 +39,12 @@ const SSH_DELETE_UNDO_SECS: u64 = 8;
 const SSH_EDITOR_CTL_H: f32 = 39.0;
 const SSH_EDITOR_AVATAR_H: f32 = 44.0;
 const COMMON_SSH_USERNAMES: &[&str] = &["root", "ubuntu", "deploy", "admin", "debian", "ec2-user"];
+
+#[derive(Clone, Copy)]
+enum SshKeyTarget {
+    Host,
+    Jump,
+}
 
 fn username_candidates(recent: &[String], query: &str) -> Vec<String> {
     let query = query.trim().to_ascii_lowercase();
@@ -152,6 +159,7 @@ pub(super) struct SshEditorState {
     pub(super) connection: crate::ssh_profiles::SshConnectionOptions,
     pub(super) original_connection: crate::ssh_profiles::SshConnectionOptions,
     pub(super) clear_proxy_password: bool,
+    pub(super) clear_jump_password: bool,
     pub(super) jump_picker_open: bool,
     pub(super) jump_choices: Vec<(String, String)>,
     pub(super) auth: crate::ssh_profiles::SshAuthMode,
@@ -176,6 +184,7 @@ impl SshEditorState {
             connection: crate::ssh_profiles::SshConnectionOptions::default(),
             original_connection: crate::ssh_profiles::SshConnectionOptions::default(),
             clear_proxy_password: false,
+            clear_jump_password: false,
             jump_picker_open: false,
             jump_choices: Vec::new(),
             // 与旧壳新增主机一致：第一次通常有密码，默认密码模式避免让
@@ -310,16 +319,19 @@ impl SettingsPane {
         let profile_path = crate::display::nebula_data_dir().join("ssh_profiles.json");
         match crate::ssh_profiles::SshProfiles::load(&profile_path) {
             Ok(mut profiles) => {
-                let proxy_credential =
-                    profiles.for_destination(&host).connection.proxy_credential_target(&host);
+                let connection = profiles.for_destination(&host).connection;
+                let credentials = [
+                    connection.proxy_credential_target(&host),
+                    connection.jump_credential_target(&host),
+                ];
                 profiles.remove(&host);
                 if let Err(error) = profiles.save(&profile_path) {
                     cleanup_errors.push(format!("Profile: {error}"));
                 } else {
                     self.ssh_hosts.profiles = profiles;
-                    if let Some(target) = proxy_credential {
+                    for target in credentials.into_iter().flatten() {
                         if let Err(error) = crate::ssh_credentials::delete_generic_secret(&target) {
-                            cleanup_errors.push(format!("Proxy credential: {error}"));
+                            cleanup_errors.push(format!("Route credential: {error}"));
                         }
                     }
                 }
@@ -451,6 +463,10 @@ impl SettingsPane {
             input.set_value("", window, cx);
             input.set_masked(true, window, cx);
         });
+        self.ssh_jump_password_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+            input.set_masked(true, window, cx);
+        });
         self.ssh_jump_host_input
             .update(cx, |input, cx| input.set_value(connection.jump_host.clone(), window, cx));
         let label = profile.and_then(|profile| profile.label).unwrap_or_default();
@@ -500,6 +516,10 @@ impl SettingsPane {
             input.set_value("", window, cx);
             input.set_masked(true, window, cx);
         });
+        self.ssh_jump_password_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+            input.set_masked(true, window, cx);
+        });
         self.ssh_icon_picker_open = false;
         self.ssh_icon_trigger_bounds = None;
         window.focus(&self.focus_handle, cx);
@@ -535,7 +555,12 @@ impl SettingsPane {
         Ok(destination)
     }
 
-    pub(super) fn add_ssh_private_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn add_ssh_private_key(
+        &mut self,
+        target: SshKeyTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(editor_id) = self.ssh_editor.as_ref().map(|editor| editor.id) else {
             return;
         };
@@ -561,7 +586,11 @@ impl SettingsPane {
                 match result {
                     Ok(path) => {
                         if let Some(editor) = this.ssh_editor.as_mut() {
-                            if crate::display::push_private_key(&mut editor.private_keys, path) {
+                            let keys = match target {
+                                SshKeyTarget::Host => &mut editor.private_keys,
+                                SshKeyTarget::Jump => &mut editor.connection.jump_private_keys,
+                            };
+                            if crate::display::push_private_key(keys, path) {
                                 this.ssh_test_task = None;
                                 editor.revision = editor.revision.wrapping_add(1);
                                 editor.test_request_id = None;
@@ -610,6 +639,14 @@ impl SettingsPane {
                     return;
                 },
             };
+        let jump_password = match self.ssh_jump_test_password(&connection, cx) {
+            Ok(password) => password,
+            Err(error) => {
+                self.ssh_status = Some(SshStatus::Error(error.to_string()));
+                cx.notify();
+                return;
+            },
+        };
         let Some(editor) = self.ssh_editor.as_mut() else { return };
         if editor.testing() {
             return;
@@ -624,6 +661,7 @@ impl SettingsPane {
             private_keys: editor.private_keys.clone(),
             connection,
             proxy_password,
+            jump_password,
             password,
         };
         let receiver = match crate::ssh_session::start_test(request) {
@@ -680,6 +718,21 @@ impl SettingsPane {
             },
         };
         let proxy_password = self.ssh_proxy_password_from_draft(cx);
+        let jump_password = self.ssh_jump_password_from_draft(cx);
+        if jump_password.as_ref().is_some_and(|password| !password.is_empty())
+            && !crate::platform::credentials::can_store()
+        {
+            self.ssh_status = Some(SshStatus::Error(
+                crate::gpui_shell::config::ui_language(cx)
+                    .text(Message::SettingsSshJumpStoreUnavailable)
+                    .to_owned(),
+            ));
+            if let Some(editor) = self.ssh_editor.as_mut() {
+                editor.advanced = true;
+            }
+            cx.notify();
+            return;
+        }
         if proxy_password.as_deref().is_some_and(|password| !password.is_empty())
             && !crate::platform::credentials::can_store()
         {
@@ -798,6 +851,21 @@ impl SettingsPane {
             cx.notify();
             return;
         }
+        if let Err(error) = crate::ssh_credentials::jump::save(
+            &destination,
+            &connection,
+            original.as_deref().zip(previous_connection.as_ref()),
+            jump_password,
+        ) {
+            self.ssh_status = Some(SshStatus::Error(
+                crate::gpui_shell::config::ui_language(cx)
+                    .format(Message::SettingsSshJumpSaveFailed, &[("error", &error.to_string())]),
+            ));
+            editor.advanced = true;
+            self.ssh_editor = Some(editor);
+            cx.notify();
+            return;
+        }
         let mut password =
             zeroize::Zeroizing::new(self.ssh_password_input.read(cx).value().to_string());
         if password.is_empty()
@@ -853,6 +921,10 @@ impl SettingsPane {
         // 当前 destination 的凭据。
         self.ssh_password_input.update(cx, |input, cx| input.set_value("", window, cx));
         self.ssh_proxy_password_input.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+            input.set_masked(true, window, cx);
+        });
+        self.ssh_jump_password_input.update(cx, |input, cx| {
             input.set_value("", window, cx);
             input.set_masked(true, window, cx);
         });

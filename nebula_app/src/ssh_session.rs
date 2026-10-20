@@ -776,10 +776,11 @@ async fn authenticated_route<H: SshEventHost>(
             password: None,
             connection: route.profile.connection.clone(),
             proxy_password: None,
+            jump_password: None,
         };
-        test_authenticate(&mut transport.session, &route.destination, &request).await?;
+        test_authenticate(&mut transport.session, route, &request).await?;
     } else {
-        authenticate(&mut transport.session, &route.destination, &route.profile).await?;
+        authenticate(&mut transport.session, route).await?;
     }
 
     let session = Arc::new(transport.session);
@@ -903,9 +904,10 @@ async fn open_transport(
 
 async fn authenticate(
     session: &mut ClientSession,
-    destination: &SshDestination,
-    profile: &crate::ssh_profiles::SshProfileAuth,
+    route: &ResolvedRoute,
 ) -> Result<(), SessionError> {
+    let destination = &route.destination;
+    let profile = &route.profile;
     if lifecycle::authentication(
         "authentication response",
         session.authenticate_none(&destination.user),
@@ -955,13 +957,10 @@ async fn authenticate(
             AuthMethod::StoredPassword => {
                 if !loaded_stored_password {
                     reusable_password =
-                        crate::ssh_credentials::load_stored_password(&destination.original)
-                            .unwrap_or_else(|error| {
-                                warn!(
-                                    "Could not read saved SSH password; prompting instead: {error}"
-                                );
-                                None
-                            });
+                        route.password.load(&destination.original).unwrap_or_else(|error| {
+                            warn!("Could not read saved SSH password; prompting instead: {error}");
+                            None
+                        });
                     loaded_stored_password = true;
                     stored_password_was_present = reusable_password.is_some();
                 }
@@ -1000,10 +999,7 @@ async fn authenticate(
                         authenticate_password(session, &destination.user, &password).await?;
                     if accepted {
                         if save {
-                            crate::ssh_credentials::store_password(
-                                &destination.original,
-                                &password,
-                            )?;
+                            route.password.store(&destination.original, &password)?;
                         }
                         password.fill(0);
                         clear_secret(&mut reusable_password);
@@ -1016,7 +1012,7 @@ async fn authenticate(
     }
 
     if stored_password_was_present {
-        if let Err(error) = crate::ssh_credentials::forget_password(&destination.original) {
+        if let Err(error) = route.password.forget(&destination.original) {
             warn!("Could not remove rejected SSH password: {error}");
         }
     }
@@ -1130,6 +1126,7 @@ pub struct SshTestRequest {
     pub password: Option<String>,
     pub connection: crate::ssh_profiles::SshConnectionOptions,
     pub proxy_password: Option<String>,
+    pub jump_password: Option<zeroize::Zeroizing<String>>,
 }
 
 impl std::fmt::Debug for SshTestRequest {
@@ -1143,6 +1140,7 @@ impl std::fmt::Debug for SshTestRequest {
             .field("connection", &self.connection)
             .field("password", &self.password.as_ref().map(|_| "[redacted]"))
             .field("proxy_password", &self.proxy_password.as_ref().map(|_| "[redacted]"))
+            .field("jump_password", &self.jump_password.as_ref().map(|_| "[redacted]"))
             .finish()
     }
 }
@@ -1185,9 +1183,10 @@ async fn run_test(request: SshTestRequest) -> SshTestResult {
             icon: None,
             connection: request.connection.clone(),
         };
-        let route =
+        let mut route =
             resolve_connection_route(&resolved, &profile, 0, request.proxy_password.clone())
                 .await?;
+        route.set_jump_password(request.jump_password.clone());
         Ok::<_, SessionError>(route)
     })
     .await;
@@ -1491,7 +1490,7 @@ async fn test_connect(route: &ResolvedRoute, request: &SshTestRequest) -> Result
         ..Default::default()
     });
     let mut transport = open_transport(route, config, true, true).await?;
-    test_authenticate(&mut transport.session, &route.destination, request).await
+    test_authenticate(&mut transport.session, route, request).await
 }
 
 /// 无人值守版认证沿用正式连接的计划；草稿密码只替代其中的保存密码。明确的
@@ -1499,13 +1498,13 @@ async fn test_connect(route: &ResolvedRoute, request: &SshTestRequest) -> Result
 /// 跳过——测试不能弹框，也不能把真实的二次验证误报成配置错误。
 async fn test_authenticate(
     session: &mut ClientSession,
-    destination: &SshDestination,
+    route: &ResolvedRoute,
     request: &SshTestRequest,
 ) -> Result<(), SessionError> {
     let mut using_agent = false;
     match tokio::time::timeout(
         TEST_TIMEOUT,
-        test_authentication_plan(session, destination, request, &mut using_agent),
+        test_authentication_plan(session, route, request, &mut using_agent),
     )
     .await
     {
@@ -1517,10 +1516,11 @@ async fn test_authenticate(
 
 async fn test_authentication_plan(
     session: &mut ClientSession,
-    destination: &SshDestination,
+    route: &ResolvedRoute,
     request: &SshTestRequest,
     using_agent: &mut bool,
 ) -> Result<(), SessionError> {
+    let destination = &route.destination;
     if session.authenticate_none(&destination.user).await?.success() {
         return Ok(());
     }
@@ -1573,8 +1573,7 @@ async fn test_authentication_plan(
                     continue;
                 }
                 if !loaded_stored_password {
-                    stored_password =
-                        crate::ssh_credentials::load_stored_password(&destination.original)?;
+                    stored_password = route.password.load(&destination.original)?;
                     loaded_stored_password = true;
                 }
                 if let Some(password) = stored_password.as_deref() {

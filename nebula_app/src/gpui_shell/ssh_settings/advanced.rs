@@ -172,6 +172,77 @@ fn save_proxy_credential_with(
 }
 
 impl SettingsPane {
+    pub(super) fn ssh_jump_keys(&self, cx: &Context<Self>) -> gpui::Div {
+        let language = crate::gpui_shell::config::ui_language(cx);
+        let editor = self.ssh_editor.as_ref().expect("open SSH editor");
+        let theme = cx.theme();
+        let rows = editor.connection.jump_private_keys.iter().enumerate().map(|(index, path)| {
+            h_flex()
+                .w_full()
+                .h(px(32.0))
+                .px_2()
+                .gap_2()
+                .items_center()
+                .rounded_md()
+                .border_1()
+                .border_color(theme.border)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_xs()
+                        .truncate()
+                        .child(ssh_key_path_tail(path, 64)),
+                )
+                .child(
+                    Button::new(SharedString::from(format!("ssh-jump-key-remove-{index}")))
+                        .debug_selector(move || format!("ssh-jump-key-remove-{index}"))
+                        .icon(IconName::Close)
+                        .ghost()
+                        .xsmall()
+                        .tooltip(language.text(Message::SettingsSshRemovePrivateKey))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(editor) = this.ssh_editor.as_mut() {
+                                if index < editor.connection.jump_private_keys.len() {
+                                    editor.connection.jump_private_keys.remove(index);
+                                }
+                            }
+                            this.touch_ssh_editor(cx);
+                        })),
+                )
+        });
+        v_flex()
+            .mt_2()
+            .gap_2()
+            .child(
+                div()
+                    .text_xs()
+                    .font_medium()
+                    .child(language.text(Message::SettingsSshJumpPrivateKeys)),
+            )
+            .when(!editor.connection.jump_private_keys.is_empty(), |list| {
+                list.child(
+                    v_flex()
+                        .h(px((editor.connection.jump_private_keys.len() as f32 * 38.0).min(140.0)))
+                        .overflow_y_scrollbar()
+                        .child(v_flex().gap(px(6.0)).children(rows)),
+                )
+            })
+            .child(
+                Button::new("ssh-jump-add-private-key")
+                    .debug_selector(|| "ssh-jump-add-private-key".to_owned())
+                    .label(language.text(Message::SettingsSshChoosePrivateKey))
+                    .icon(IconName::Plus)
+                    .outline()
+                    .small()
+                    .w_full()
+                    .h(px(40.0))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.add_ssh_private_key(SshKeyTarget::Jump, window, cx);
+                    })),
+            )
+    }
+
     pub(super) fn ssh_connection_from_draft(
         &self,
         destination: &str,
@@ -537,10 +608,7 @@ impl SettingsPane {
                                             }))),
                                     )
                                 })
-                                .child(editor_hint(language.pick(
-                                    "沿用跳板主机自己的用户名、密钥和已存凭据；不会使用目标主机的密码。",
-                                    "Uses the jump host's own username, keys and saved credentials, never the target password.",
-                                ), cx)),
+                                .child(self.ssh_jump_authentication(window, cx)),
                         )
                     })
                     .child(editor_hint(language.pick(

@@ -83,6 +83,49 @@ fn explicit_network_proxy_overrides_jump_proxy_only_at_first_network_hop() {
 }
 
 #[test]
+fn inline_jump_keys_override_only_the_selected_hop_and_change_pool_identity() {
+    let (destination, mut profile) = host("root@target");
+    profile.auth = SshAuthMode::Password;
+    profile.private_keys = vec!["target-key".into()];
+    jump(&mut profile, "bastion@hop");
+    let (jump_destination, mut jump_profile) = host("bastion@hop");
+    jump_profile.auth = SshAuthMode::Password;
+    jump_profile.private_keys = vec!["saved-hop-key".into()];
+    let hosts =
+        HashMap::from([("bastion@hop".to_owned(), (jump_destination, jump_profile.clone()))]);
+    let inherited = resolve(destination.clone(), profile.clone(), &global_proxy(), &hosts).unwrap();
+    profile.connection.jump_private_keys = vec!["inline-hop-key".into()];
+    let route = resolve(destination.clone(), profile.clone(), &global_proxy(), &hosts).unwrap();
+    assert_ne!(inherited.pool_key(), route.pool_key());
+    assert_eq!(route.profile.auth, SshAuthMode::Password);
+    assert_eq!(route.profile.private_keys, vec![std::path::PathBuf::from("target-key")]);
+    let RouteTransport::Jump(hop) = route.transport else { panic!("expected jump") };
+    assert_eq!(hop.profile.auth, SshAuthMode::PublicKey);
+    assert_eq!(hop.profile.private_keys, vec![std::path::PathBuf::from("inline-hop-key")]);
+    assert_eq!(hosts["bastion@hop"].1, jump_profile);
+    profile.connection.jump_private_keys.clear();
+    let restored = resolve(destination, profile, &global_proxy(), &hosts).unwrap();
+    assert_eq!(inherited.pool_key(), restored.pool_key());
+}
+
+#[test]
+fn inactive_inline_keys_do_not_override_an_inherited_jump() {
+    let (mut destination, mut profile) = host("root@target");
+    destination.proxy_jump = Some("bastion@hop".into());
+    profile.connection.jump_private_keys = vec!["inactive-key".into()];
+    let (jump_destination, mut jump_profile) = host("bastion@hop");
+    jump_profile.auth = SshAuthMode::Password;
+    let hosts =
+        HashMap::from([("bastion@hop".to_owned(), (jump_destination, jump_profile.clone()))]);
+    let route = resolve(destination.clone(), profile.clone(), &global_proxy(), &hosts).unwrap();
+    let RouteTransport::Jump(hop) = route.transport else { panic!("expected jump") };
+    assert_eq!(hop.profile, jump_profile);
+    profile.connection.jump_mode = SshHostJumpMode::None;
+    let route = resolve(destination, profile, &global_proxy(), &hosts).unwrap();
+    assert!(matches!(route.transport, RouteTransport::Server(_)));
+}
+
+#[test]
 fn direct_disables_network_proxy_but_keeps_jump() {
     let (destination, mut profile) = host("root@target");
     profile.connection.proxy_mode = SshHostProxyMode::Direct;
@@ -236,7 +279,7 @@ fn proxy_password_load_uses_its_own_destination_scoped_credential_target() {
 }
 
 #[test]
-fn test_request_debug_redacts_both_password_fields() {
+fn test_request_debug_redacts_all_password_fields() {
     let request = SshTestRequest {
         request_id: 1,
         destination: "root@target".to_owned(),
@@ -245,9 +288,52 @@ fn test_request_debug_redacts_both_password_fields() {
         password: Some("ssh-secret".to_owned()),
         connection: Default::default(),
         proxy_password: Some("proxy-secret".to_owned()),
+        jump_password: Some(zeroize::Zeroizing::new("jump-secret".to_owned())),
     };
     let debug = format!("{request:?}");
     assert!(!debug.contains("ssh-secret"));
     assert!(!debug.contains("proxy-secret"));
-    assert_eq!(debug.matches("[redacted]").count(), 2);
+    assert!(!debug.contains("jump-secret"));
+    assert_eq!(debug.matches("[redacted]").count(), 3);
+}
+
+#[test]
+fn jump_password_scope_and_draft_never_reach_the_target_or_other_routes() {
+    use crate::ssh_profiles::SshJumpAuthMode;
+    let (destination, mut profile) = host("target-user@target");
+    profile.auth = SshAuthMode::PublicKey;
+    jump(&mut profile, "jump-user@bastion");
+    profile.connection.jump_auth = Some(SshJumpAuthMode::Password);
+    profile.connection.jump_private_keys = vec!["inactive-key".into()];
+    let hosts = HashMap::from([("jump-user@bastion".into(), host("jump-user@bastion"))]);
+    let mut route = resolve(destination.clone(), profile.clone(), &global_proxy(), &hosts).unwrap();
+    let key = route.pool_key();
+    route.set_jump_password(Some(zeroize::Zeroizing::new("fixture-jump-draft".into())));
+    assert_eq!(route.pool_key(), key);
+    assert!(route.password.draft.is_none());
+    assert!(route.password.target.is_none());
+    assert_eq!(route.profile.auth, SshAuthMode::PublicKey);
+    let RouteTransport::Jump(hop) = &route.transport else { panic!("expected jump") };
+    assert_eq!(hop.profile.auth, SshAuthMode::Password);
+    assert_eq!(
+        hop.password.target,
+        profile.connection.jump_credential_target(&profile.destination)
+    );
+    assert_eq!(
+        hop.password.load("must-not-read-a-saved-secret").unwrap(),
+        Some(b"fixture-jump-draft".to_vec())
+    );
+    route.set_jump_password(Some(zeroize::Zeroizing::new(String::new())));
+    let RouteTransport::Jump(hop) = &route.transport else { panic!("expected jump") };
+    assert!(hop.password.load("must-not-read-a-saved-secret").unwrap().is_none());
+    profile.destination = "separate-profile".into();
+    let separate = resolve(destination.clone(), profile.clone(), &global_proxy(), &hosts).unwrap();
+    assert_ne!(key, separate.pool_key());
+    profile.connection.jump_auth = Some(SshJumpAuthMode::Inherit);
+    let mut inherited = resolve(destination, profile, &global_proxy(), &hosts).unwrap();
+    inherited.set_jump_password(Some(zeroize::Zeroizing::new("inactive-draft".into())));
+    let RouteTransport::Jump(hop) = inherited.transport else { panic!("expected jump") };
+    assert_eq!(hop.profile.auth, SshAuthMode::Auto);
+    assert!(hop.password.target.is_none());
+    assert!(hop.password.draft.is_none());
 }

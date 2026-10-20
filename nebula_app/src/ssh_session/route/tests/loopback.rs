@@ -19,6 +19,7 @@ use crate::ssh_session::{SshTestRequest, test_connect};
 const PROXY_USER: &str = "fixture-proxy-user";
 const PROXY_PASSWORD: &str = "fixture-proxy-draft-password";
 const BASTION_USER: &str = "fixture-bastion-user";
+const BASTION_PASSWORD: &str = "fixture-bastion-password";
 const TARGET_USER: &str = "fixture-target-user";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -29,6 +30,13 @@ enum Failure {
     TargetIdentity,
     BastionHostKey,
     TargetHostKey,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BastionAuth {
+    SavedKey,
+    InlineKey,
+    InlinePassword,
 }
 
 #[derive(Default)]
@@ -42,6 +50,7 @@ struct Observations {
 struct LoopbackSshServer {
     username: &'static str,
     public_key: PublicKey,
+    password: Option<&'static str>,
     forward_destination: Option<SocketAddr>,
     observations: Arc<Mutex<Observations>>,
 }
@@ -54,7 +63,8 @@ impl server::Handler for LoopbackSshServer {
         username: &str,
         public_key: &PublicKey,
     ) -> Result<Auth, Self::Error> {
-        let accepted = username == self.username && public_key == &self.public_key;
+        let accepted =
+            self.password.is_none() && username == self.username && public_key == &self.public_key;
         self.observations.lock().unwrap().ssh_authentication.push((
             self.username,
             username.to_owned(),
@@ -63,17 +73,14 @@ impl server::Handler for LoopbackSshServer {
         Ok(if accepted { Auth::Accept } else { Auth::reject() })
     }
 
-    async fn auth_password(
-        &mut self,
-        username: &str,
-        _password: &str,
-    ) -> Result<Auth, Self::Error> {
+    async fn auth_password(&mut self, username: &str, password: &str) -> Result<Auth, Self::Error> {
+        let accepted = username == self.username && self.password == Some(password);
         self.observations.lock().unwrap().ssh_authentication.push((
-            "unexpected-password-auth",
+            if self.password.is_some() { self.username } else { "unexpected-password-auth" },
             username.to_owned(),
-            false,
+            accepted,
         ));
-        Ok(Auth::reject())
+        Ok(if accepted { Auth::Accept } else { Auth::reject() })
     }
 
     async fn channel_open_direct_tcpip(
@@ -257,7 +264,7 @@ fn spawn_proxy(
     })
 }
 
-async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure) {
+async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure, auth: BastionAuth) {
     let temporary = tempfile::tempdir().unwrap();
     let known_hosts = temporary.path().join("known_hosts");
     let bastion_key_path = temporary.path().join("bastion-identity");
@@ -304,6 +311,7 @@ async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure) {
         LoopbackSshServer {
             username: TARGET_USER,
             public_key: target_identity.public_key().clone(),
+            password: None,
             forward_destination: None,
             observations: observations.clone(),
         },
@@ -314,6 +322,7 @@ async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure) {
         LoopbackSshServer {
             username: BASTION_USER,
             public_key: bastion_identity.public_key().clone(),
+            password: (auth == BastionAuth::InlinePassword).then_some(BASTION_PASSWORD),
             forward_destination: Some(target_address),
             observations: observations.clone(),
         },
@@ -344,6 +353,13 @@ async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure) {
     bastion_profile.auth = SshAuthMode::PublicKey;
     bastion_profile.private_keys =
         vec![if failure == Failure::BastionIdentity { target_key_path } else { bastion_key_path }];
+    if auth == BastionAuth::InlineKey {
+        profile.connection.jump_private_keys = std::mem::take(&mut bastion_profile.private_keys);
+        bastion_profile.auth = SshAuthMode::Password;
+    }
+    if auth == BastionAuth::InlinePassword {
+        profile.connection.jump_auth = Some(crate::ssh_profiles::SshJumpAuthMode::Password);
+    }
     let proxy_draft = if failure == Failure::ProxyPassword {
         "incorrect-fixture-proxy-draft"
     } else {
@@ -357,6 +373,16 @@ async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure) {
         password: None,
         connection: profile.connection.clone(),
         proxy_password: Some(proxy_draft.to_owned()),
+        jump_password: (auth == BastionAuth::InlinePassword).then(|| {
+            zeroize::Zeroizing::new(
+                if failure == Failure::BastionIdentity {
+                    "wrong-jump-password"
+                } else {
+                    BASTION_PASSWORD
+                }
+                .to_owned(),
+            )
+        }),
     };
     let mut route = resolve_route_with(
         destination,
@@ -371,6 +397,7 @@ async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure) {
         &mut |_| panic!("a loopback fixture must never read stored credentials"),
     )
     .unwrap();
+    route.set_jump_password(request.jump_password.clone());
     configure_known_hosts(&mut route, &known_hosts);
     assert!(!route.pool_key().contains(proxy_draft));
     let outcome = test_connect(&route, &request).await;
@@ -445,11 +472,43 @@ async fn verify_loopback_route(scheme: ProxyScheme, failure: Failure) {
 }
 
 fn run_loopback(scheme: ProxyScheme, failure: Failure) {
+    run_loopback_with_auth(scheme, failure, BastionAuth::SavedKey);
+}
+
+fn run_loopback_with_auth(scheme: ProxyScheme, failure: Failure, auth: BastionAuth) {
     tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
-        tokio::time::timeout(Duration::from_secs(15), verify_loopback_route(scheme, failure))
+        tokio::time::timeout(Duration::from_secs(15), verify_loopback_route(scheme, failure, auth))
             .await
             .expect("the isolated SSH route fixture must finish within its deadline");
     });
+}
+
+#[test]
+fn inline_bastion_key_authenticates_without_a_saved_key_profile() {
+    run_loopback_with_auth(ProxyScheme::Socks5, Failure::None, BastionAuth::InlineKey);
+}
+
+#[test]
+fn wrong_inline_bastion_key_stops_before_target_authentication() {
+    run_loopback_with_auth(
+        ProxyScheme::HttpConnect,
+        Failure::BastionIdentity,
+        BastionAuth::InlineKey,
+    );
+}
+
+#[test]
+fn inline_bastion_password_and_target_key_authenticate_independently() {
+    run_loopback_with_auth(ProxyScheme::Socks5, Failure::None, BastionAuth::InlinePassword);
+}
+
+#[test]
+fn wrong_inline_bastion_password_stops_before_forwarding() {
+    run_loopback_with_auth(
+        ProxyScheme::HttpConnect,
+        Failure::BastionIdentity,
+        BastionAuth::InlinePassword,
+    );
 }
 
 #[test]

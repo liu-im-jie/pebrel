@@ -544,6 +544,7 @@ impl Display {
             password: (!editor.password.is_empty()).then(|| editor.password.clone()),
             connection: Default::default(),
             proxy_password: None,
+            jump_password: None,
         });
     }
 

@@ -35,6 +35,23 @@ fn explicit_direct_and_disabled_jump_survive_profile_round_trip() {
 }
 
 #[test]
+fn jump_private_keys_round_trip_independently_and_old_routes_keep_inheriting() {
+    let old: SshConnectionOptions =
+        serde_json::from_str(r#"{"jump_mode":"host","jump_host":"jump@bastion"}"#).unwrap();
+    assert!(old.jump_private_keys.is_empty());
+    assert!(!serde_json::to_string(&old).unwrap().contains("jump_private_keys"));
+    let mut profiles = SshProfiles::default();
+    let mut profile = profiles.for_destination("root@target");
+    profile.private_keys = vec!["target-key".into()];
+    profile.connection = old;
+    profile.connection.jump_private_keys = vec!["jump-key.pem".into(), "jump-key.ppk".into()];
+    profiles.upsert(profile.clone());
+    let serialized = serde_json::to_string(&profiles).unwrap();
+    let restored: SshProfiles = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(restored.for_destination("root@target"), profile);
+}
+
+#[test]
 fn proxy_defaults_are_protocol_specific() {
     let mut options = proxy();
     assert_eq!(options.effective_proxy_port(), 1080);
@@ -44,6 +61,33 @@ fn proxy_defaults_are_protocol_specific() {
     assert_eq!(options.effective_proxy_port(), 3128);
     options.proxy_port = Some(0);
     assert!(options.validate("root@host").is_err());
+}
+
+#[test]
+fn jump_password_auth_is_additive_and_scoped_without_serializing_secrets() {
+    use super::SshJumpAuthMode;
+    let mut options = SshConnectionOptions {
+        jump_mode: SshHostJumpMode::Host,
+        jump_host: "alice@bastion:2222".into(),
+        jump_private_keys: vec!["old-key.pem".into()],
+        ..Default::default()
+    };
+    assert_eq!(options.effective_jump_auth(), SshJumpAuthMode::PublicKey);
+    options.jump_auth = Some(SshJumpAuthMode::Password);
+    let first = options.jump_credential_target("target-a").unwrap();
+    assert_ne!(Some(first.clone()), options.jump_credential_target("target-b"));
+    let json = serde_json::to_string(&options).unwrap();
+    let restored: SshConnectionOptions = serde_json::from_str(&json).unwrap();
+    assert_eq!(restored, options);
+    assert!(!json.contains("jump_password"));
+    options.jump_host = "bob@bastion:2222".into();
+    assert_ne!(Some(first), options.jump_credential_target("target-a"));
+    options.jump_auth = Some(SshJumpAuthMode::Inherit);
+    assert_eq!(options.effective_jump_auth(), SshJumpAuthMode::Inherit);
+    assert!(options.jump_credential_target("target-a").is_none());
+    options.jump_auth = Some(SshJumpAuthMode::Password);
+    options.jump_mode = SshHostJumpMode::None;
+    assert!(options.jump_credential_target("target-a").is_none());
 }
 
 #[test]

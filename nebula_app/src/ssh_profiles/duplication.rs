@@ -92,6 +92,9 @@ pub(crate) fn save_duplicate(
     if let Some(old) = connection.proxy_credential_target(source) {
         keys.push((old, connection.proxy_credential_target(identity).expect("same proxy options")));
     }
+    if let Some(old) = connection.jump_credential_target(source) {
+        keys.push((old, connection.jump_credential_target(identity).expect("same jump options")));
+    }
     let mut written = Vec::new();
     let result = (|| {
         for (old, new) in keys {

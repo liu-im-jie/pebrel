@@ -191,6 +191,7 @@ pub struct SettingsPane {
     pub(super) ssh_proxy_username_input: Entity<InputState>,
     pub(super) ssh_proxy_password_input: Entity<InputState>,
     pub(super) ssh_jump_host_input: Entity<InputState>,
+    pub(super) ssh_jump_password_input: Entity<InputState>,
     /// 用户名输入框本身可自由编辑；候选层只提供最近使用值，不把输入约束成
     /// 固定枚举。锚点跟随输入框，滚动/DPI 变化后仍贴在其下方。
     pub(super) ssh_username_picker_open: bool,
@@ -339,6 +340,7 @@ impl SettingsPane {
             (&self.ssh_proxy_username_input, "ssh_proxy_username"),
             (&self.ssh_proxy_password_input, "ssh_proxy_password"),
             (&self.ssh_jump_host_input, "ssh_jump_host"),
+            (&self.ssh_jump_password_input, "ssh_jump_password"),
             (&self.ssh_icon_filter_input, "ssh_icon_filter"),
             (&self.font_family_input, "font_family"),
             (&self.font_family_cjk_input, "font_family"),

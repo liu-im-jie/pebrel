@@ -577,7 +577,7 @@ impl SettingsPane {
                                 .w_full()
                                 .h(px(40.0))
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.add_ssh_private_key(window, cx)
+                                    this.add_ssh_private_key(SshKeyTarget::Host, window, cx)
                                 })),
                         )
                         .child(editor_hint(language.tr("settings.ssh.default_keys"), cx)),

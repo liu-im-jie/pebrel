@@ -21,6 +21,14 @@ pub enum SshHostJumpMode {
     Host,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SshJumpAuthMode {
+    Inherit,
+    Password,
+    PublicKey,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SshConnectionOptions {
@@ -30,9 +38,33 @@ pub struct SshConnectionOptions {
     pub proxy_username: String,
     pub jump_mode: SshHostJumpMode,
     pub jump_host: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jump_auth: Option<SshJumpAuthMode>,
+    /// Keys for this route's public-key mode; legacy configs infer the mode from this list.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub jump_private_keys: Vec<std::path::PathBuf>,
 }
 
 impl SshConnectionOptions {
+    pub fn effective_jump_auth(&self) -> SshJumpAuthMode {
+        self.jump_auth.unwrap_or(if self.jump_private_keys.is_empty() {
+            SshJumpAuthMode::Inherit
+        } else {
+            SshJumpAuthMode::PublicKey
+        })
+    }
+
+    pub fn jump_credential_target(&self, owner: &str) -> Option<String> {
+        if self.jump_mode != SshHostJumpMode::Host
+            || self.effective_jump_auth() != SshJumpAuthMode::Password
+        {
+            return None;
+        }
+        // Length-prefixed identities cannot collide when an address contains separators.
+        let jump = self.jump_host.trim();
+        Some(format!("Pebrel/SSH/Jump/{}:{owner}/{}:{jump}", owner.len(), jump.len()))
+    }
+
     pub fn is_default(&self) -> bool {
         self == &Self::default()
     }
