@@ -18,7 +18,7 @@ fn click(cx: &mut gpui::VisualTestContext, selector: &'static str) {
 }
 
 #[gpui::test]
-fn backup_errors_and_password_help_keep_their_full_layout(cx: &mut gpui::TestAppContext) {
+fn backup_errors_and_password_controls_keep_their_full_layout(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
         gpui_component::init(cx);
         cx.set_reduce_motion(true);
@@ -49,16 +49,15 @@ fn backup_errors_and_password_help_keep_their_full_layout(cx: &mut gpui::TestApp
             let error = cx.debug_bounds("backup-storage-error").unwrap();
             let encryption = cx.debug_bounds("backup-encryption").unwrap();
             let password = cx.debug_bounds("backup-password").unwrap();
-            let description = cx.debug_bounds("backup-password-description").unwrap();
+            assert!(cx.debug_bounds("backup-password-description").is_none());
             assert!(error.size.height > px(30.0), "the long error must wrap: {error:?}");
             assert!(
                 error.bottom() + px(8.0) <= panel.bottom(),
                 "error clipped: {error:?}, {panel:?}"
             );
             assert!(panel.bottom() < encryption.top(), "sections overlap");
-            assert!(password.bottom() <= description.top(), "help must have its own line");
-            assert!(description.bottom() <= encryption.bottom(), "help clipped");
-            assert!(description.right() <= panel.right(), "help exceeds the content column");
+            assert!(password.bottom() <= encryption.bottom(), "password control clipped");
+            assert!(password.right() <= panel.right(), "control exceeds the content column");
         }
     }
 }
@@ -332,7 +331,8 @@ fn check_backup_form_layout(cx: &mut gpui::TestAppContext, language: crate::disp
         });
         draw(cx);
         let wizard = cx.debug_bounds("backup-wizard").unwrap();
-        for selector in ["backup-wizard-heading", "backup-password-form", "backup-password-note"] {
+        assert!(cx.debug_bounds("backup-password-note").is_none());
+        for selector in ["backup-wizard-heading", "backup-password-form"] {
             let bounds = cx.debug_bounds(selector).unwrap();
             assert!((bounds.center().x - wizard.center().x).abs() <= px(1.0));
             assert!(bounds.left() >= wizard.left() && bounds.right() <= wizard.right());
@@ -349,7 +349,7 @@ fn check_backup_form_layout(cx: &mut gpui::TestAppContext, language: crate::disp
 }
 
 #[gpui::test]
-fn backup_provider_rows_contain_titles_and_wrapped_hints(cx: &mut gpui::TestAppContext) {
+fn backup_provider_rows_keep_titles_and_hit_targets_without_hints(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
         gpui_component::init(cx);
         cx.set_reduce_motion(true);
@@ -405,7 +405,6 @@ fn backup_provider_rows_contain_titles_and_wrapped_hints(cx: &mut gpui::TestAppC
                     }
                 }
                 let mut previous_bottom = None;
-                let mut wrapped = false;
                 for (row_selector, title_selector, hint_selector) in [
                     ("backup-provider-0", "backup-provider-title-0", "backup-provider-hint-0"),
                     ("backup-provider-1", "backup-provider-title-1", "backup-provider-hint-1"),
@@ -415,34 +414,23 @@ fn backup_provider_rows_contain_titles_and_wrapped_hints(cx: &mut gpui::TestAppC
                 ] {
                     let row = cx.debug_bounds(row_selector).unwrap();
                     let title = cx.debug_bounds(title_selector).unwrap();
-                    let hint = cx.debug_bounds(hint_selector).unwrap();
+                    assert!(cx.debug_bounds(hint_selector).is_none());
                     assert!(
                         title.top() >= row.top() + px(8.0),
                         "title escapes row at {language:?}/{width}: {title:?}, {row:?}"
                     );
                     assert!(
-                        title.bottom() < hint.top(),
-                        "title and hint overlap: {title:?}, {hint:?}"
+                        title.bottom() <= row.bottom() - px(8.0),
+                        "title escapes row at {language:?}/{width}: {title:?}, {row:?}"
                     );
                     assert!(
-                        hint.bottom() <= row.bottom() - px(8.0),
-                        "hint escapes row at {language:?}/{width}: {hint:?}, {row:?}"
-                    );
-                    assert!(
-                        hint.left() >= row.left() && hint.right() <= row.right(),
-                        "hint exceeds row width"
+                        title.left() >= row.left() && title.right() <= row.right(),
+                        "title exceeds row width"
                     );
                     if let Some(bottom) = previous_bottom {
                         assert!(bottom + px(4.0) <= row.top(), "provider rows overlap");
                     }
                     previous_bottom = Some(row.bottom());
-                    wrapped |= hint.size.height > px(30.0);
-                }
-                if width == 600.0 {
-                    assert!(
-                        wrapped,
-                        "narrow layout must exercise wrapped provider descriptions: {language:?}"
-                    );
                 }
                 // Both the top and bottom padding belong to the full provider hit target.
                 for (selector, protocol) in [

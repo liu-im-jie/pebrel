@@ -38,7 +38,7 @@ impl SettingsPane {
                     dialog,
                     window,
                     language.text(Message::WallpaperShaderConfirm),
-                    SharedString::from(language.text(Message::WallpaperShaderConfirmDescription)),
+                    "",
                     language.text(Message::WallpaperShaderEnable),
                     language.text(Message::WallpaperShaderCancel),
                     ButtonVariant::Primary,
@@ -121,7 +121,6 @@ impl SettingsPane {
         });
         self.row_with_reset(
             language.text(Message::WallpaperShaderSource),
-            language.text(Message::WallpaperShaderSourceDescription),
             current.is_some(),
             |this, window, cx| {
                 this.shader_picker.take();

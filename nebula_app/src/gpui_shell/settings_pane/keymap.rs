@@ -211,10 +211,6 @@ impl SettingsPane {
         if !skip_bare_key_guard && bare_printable_key_needs_guard(&combo) {
             let language = crate::gpui_shell::config::ui_language(cx);
             let pane = cx.entity().downgrade();
-            let description = language.format(
-                crate::i18n::Message::SettingsKeymapBareDescription,
-                &[("combo", combo.as_str())],
-            );
             window.open_dialog(cx, move |dialog, window, _cx| {
                 let pane = pane.clone();
                 let combo = combo.clone();
@@ -222,7 +218,7 @@ impl SettingsPane {
                     dialog,
                     window,
                     language.text(crate::i18n::Message::SettingsKeymapBareTitle),
-                    description.as_str(),
+                    combo.clone(),
                     language.text(crate::i18n::Message::SettingsKeymapBareConfirm),
                     language.text(crate::i18n::Message::CommonCancel),
                     ButtonVariant::Danger,
@@ -431,7 +427,6 @@ impl SettingsPane {
             groups_block = groups_block.child(self.select_row(
                 "quick_terminal_mode",
                 language.text(crate::i18n::Message::SettingsQuickTerminalMode),
-                language.text(crate::i18n::Message::SettingsQuickTerminalDescription),
                 cx,
             ));
         }
@@ -543,13 +538,6 @@ impl SettingsPane {
                 section.child(Alert::warning("keymap-clash-warning", note).small())
             })
             .child(groups_block)
-            .child(
-                div()
-                    .pt_4()
-                    .text_size(px(self.font_size_px(cx) * 0.86))
-                    .text_color(cx.theme().muted_foreground)
-                    .child(language.tr("settings.keymap.help")),
-            )
     }
 }
 

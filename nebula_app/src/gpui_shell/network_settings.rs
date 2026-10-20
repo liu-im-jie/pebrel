@@ -180,7 +180,6 @@ impl SettingsPane {
             .child(self.switch_row(
                 "terminal_proxy",
                 language.text(crate::i18n::Message::SettingsNetworkTerminalLabel),
-                language.text(crate::i18n::Message::SettingsNetworkTerminalDescription),
                 self.runtime.terminal_proxy,
                 cx,
             ))
@@ -191,10 +190,7 @@ impl SettingsPane {
         let theme = cx.theme();
         let running = matches!(self.proxy_test_status, ProxyTestStatus::Running);
         let (status, status_color) = match &self.proxy_test_status {
-            ProxyTestStatus::Idle => (
-                SharedString::from(language.tr("settings.network.status.idle")),
-                theme.muted_foreground,
-            ),
+            ProxyTestStatus::Idle => (SharedString::default(), theme.muted_foreground),
             ProxyTestStatus::Running => {
                 (SharedString::from(language.tr("settings.network.status.running")), theme.link)
             },
@@ -217,10 +213,15 @@ impl SettingsPane {
             .pr(px(12.0))
             .gap_3()
             .rounded(px(crate::display::ui::tokens::radius::OVERLAY))
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.muted)
-            .child(div().flex_1().min_w_0().text_color(status_color).child(status))
+            .when(!status.is_empty(), |banner| {
+                banner.border_1().border_color(theme.border).bg(theme.muted)
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .when(!status.is_empty(), |slot| slot.text_color(status_color).child(status)),
+            )
             .child(
                 div()
                     .w(px(PROXY_TEST_BUTTON_W))
@@ -243,7 +244,6 @@ impl SettingsPane {
         let select = self.select_of("ssh_proxy_mode");
         self.row(
             language.tr("settings.network.mode.label"),
-            "",
             div()
                 .w(px(PROXY_MODE_SELECT_W))
                 .text_color(cx.theme().link)
@@ -256,7 +256,6 @@ impl SettingsPane {
         let language = crate::gpui_shell::config::ui_language(cx);
         self.row(
             language.tr("settings.network.address.label"),
-            "",
             h_flex()
                 .flex_1()
                 .min_w(px(PROXY_PROTOCOL_SELECT_W + PROXY_MANUAL_GAP + 80.0))

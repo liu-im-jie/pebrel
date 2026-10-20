@@ -108,13 +108,7 @@ pub(super) fn localized_select_labels(
             language.pick("声音", "Sound"),
             language.pick("闪烁 + 声音", "Visual + sound"),
         ],
-        "blur" => vec![
-            language.pick("无", "None"),
-            language.pick("Mica（低开销）", "Mica (low cost)"),
-            language.pick("Mica Alt（低开销）", "Mica Alt (low cost)"),
-            language.pick("Aero（玻璃）", "Aero (glass)"),
-            language.pick("Acrylic（高开销）", "Acrylic (high cost)"),
-        ],
+        "blur" => vec![language.pick("无", "None"), "Mica", "Mica Alt", "Aero", "Acrylic"],
         "accept" => vec![
             language.pick("右方向键", "Right arrow"),
             "Tab",

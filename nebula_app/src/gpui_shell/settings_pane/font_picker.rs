@@ -323,13 +323,8 @@ impl SettingsPane {
         if self.active_section == 1 {
             return control.into_any_element();
         }
-        self.row(
-            language.text(crate::i18n::Message::SettingsFontEnglish),
-            help("font_family", language),
-            control,
-            cx,
-        )
-        .into_any_element()
+        self.row(language.text(crate::i18n::Message::SettingsFontEnglish), control, cx)
+            .into_any_element()
     }
 
     fn chain_action(
@@ -544,12 +539,6 @@ impl SettingsPane {
                     .text_sm()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .child(language.pick("字体组", "Font group")),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(language.tr("settings.font.group_description")),
             )
             .when(self.font_loading, |panel| {
                 panel.child(

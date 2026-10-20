@@ -177,15 +177,6 @@ impl SettingsPane {
                         .child(format!("{size:.0} px")),
                 )
             }));
-        let help = div()
-            .mt(px(if compact { 9.0 } else { 21.0 }))
-            .text_size(px(10.5))
-            .line_height(gpui::relative(1.7))
-            .text_color(colors.secondary)
-            .child(language.pick(
-                "这里只切换预览背景。图标不会跟随主题自动变化。",
-                "This only changes the preview background. Your icon does not follow the theme.",
-            ));
         let preview = if compact {
             h_flex()
                 .w_full()
@@ -193,12 +184,7 @@ impl SettingsPane {
                 .items_start()
                 .child(canvas.w(px(104.0)).flex_shrink_0())
                 .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .child(title)
-                        .child(div().mt(px(9.0)).child(tabs))
-                        .child(help),
+                    v_flex().flex_1().min_w_0().child(title).child(div().mt(px(9.0)).child(tabs)),
                 )
         } else {
             v_flex()
@@ -208,7 +194,6 @@ impl SettingsPane {
                 .child(h_flex().mt(px(13.0)).justify_center().child(tabs))
                 .child(div().mt(px(19.0)).child(title))
                 .child(sizes)
-                .child(help)
         };
         if compact {
             v_flex().w(px(width)).gap(px(20.0)).child(preview).child(grid)

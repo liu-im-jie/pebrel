@@ -92,7 +92,7 @@ fn status_message(status: Status) -> Message {
 fn row(
     id: &'static str,
     title: &'static str,
-    hint: impl Into<SharedString>,
+    status: Option<SharedString>,
     control: impl IntoElement,
     cx: &App,
 ) -> gpui::Stateful<gpui::Div> {
@@ -112,7 +112,7 @@ fn row(
                 .min_w_0()
                 .gap(px(3.0))
                 .child(div().text_size(px(14.0)).child(title))
-                .child(description(hint, cx)),
+                .children(status.map(|status| description(status, cx))),
         )
         .child(h_flex().flex_shrink_0().gap_2().child(control))
 }
@@ -144,17 +144,13 @@ impl SettingsPane {
             .text_size(px(14.0))
             .line_height(px(21.0))
             .child(
-                v_flex()
-                    .w_full()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .text_size(px(22.0))
-                            .line_height(px(30.0))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child(language.text(Message::MobileTitle)),
-                    )
-                    .child(description(language.text(Message::MobileSubtitle), cx)),
+                v_flex().w_full().gap(px(6.0)).child(
+                    div()
+                        .text_size(px(22.0))
+                        .line_height(px(30.0))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .child(language.text(Message::MobileTitle)),
+                ),
             );
         if let Some(failure) = self.mobile.failure {
             page = page.child(
@@ -205,7 +201,6 @@ impl SettingsPane {
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .child(language.text(Message::MobileOffTitle)),
             )
-            .child(description(language.text(Message::MobileOffDescription), cx))
             .child(
                 h_flex().mt(px(20.0)).child(
                     Button::new("mobile-enable")
@@ -278,53 +273,6 @@ impl SettingsPane {
                 h_flex().h(px(28.0)).children(buttons),
                 div().rounded(px(6.0)).bg(crate::gpui_shell::theme::settings_panel_bg(cx)),
             ));
-        let mut steps = v_flex()
-            .id("mobile-pairing-steps")
-            .debug_selector(|| "mobile-pairing-steps".into())
-            .w_full()
-            .mt(px(18.0))
-            .gap(px(10.0));
-        let messages = match mode {
-            Mode::Lan => {
-                [Message::MobileStepOpen, Message::MobileStepScan, Message::MobileStepApprove]
-            },
-            Mode::Relay => {
-                [Message::MobileStepRelay, Message::MobileStepScan, Message::MobileStepApprove]
-            },
-        };
-        for (index, message) in messages.into_iter().enumerate() {
-            let mut body = v_flex().flex_1().min_w_0().child(language.text(message));
-            if index == 0 {
-                body = body.child(description(
-                    language.text(if mode == Mode::Lan {
-                        Message::MobileLanHint
-                    } else {
-                        Message::MobileRelayOutbound
-                    }),
-                    cx,
-                ));
-            }
-            steps = steps.child(
-                h_flex()
-                    .w_full()
-                    .items_start()
-                    .gap(px(10.0))
-                    .child(
-                        div()
-                            .size(px(20.0))
-                            .flex_shrink_0()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_full()
-                            .text_size(px(11.5))
-                            .child((index + 1).to_string()),
-                    )
-                    .child(body),
-            );
-        }
         let valid = self.mobile.valid_qr();
         let mut qr = v_flex().w(px(232.0)).flex_shrink_0().items_center().gap(px(10.0));
         let code = div()
@@ -426,13 +374,11 @@ impl SettingsPane {
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .child(language.text(Message::MobilePairTitle)),
             )
-            .child(description(language.text(Message::MobilePairDescription), cx))
             .child(h_flex().child(modes))
-            // 网卡决定当前邀请的地址，应和连接类型、扫码步骤放在同一配对卡片里。
+            // 网卡决定当前邀请的地址，和连接类型放在同一配对卡片里。
             .when(mode == Mode::Lan, |left| {
                 left.child(self.mobile_lan_options(true, cx).mt(px(14.0)))
-            })
-            .child(steps);
+            });
         if let Some(connection) = self.mobile.snapshot.as_ref().and_then(|s| s.connection(mode)) {
             left = left.child(
                 description(
@@ -720,7 +666,6 @@ impl SettingsPane {
                 .w_full()
                 .gap(px(6.0))
                 .child(div().text_size(px(14.0)).child(language.text(Message::MobileInterface)))
-                .child(description(language.text(Message::MobileInterfaceHint), cx))
                 .child(
                     h_flex()
                         .w_full()
@@ -787,8 +732,7 @@ impl SettingsPane {
                                     this.mobile_refresh_addresses(window, cx)
                                 })),
                         ),
-                )
-                .child(description(language.text(Message::MobilePortHint), cx)),
+                ),
         )
     }
 
@@ -805,13 +749,12 @@ impl SettingsPane {
                     .justify_between()
                     .gap_3()
                     .pb(px(6.0))
-                    .child(group_heading(language.text(Message::MobileConnections), cx))
-                    .child(description(language.text(Message::MobileConnectionsHint), cx)),
+                    .child(group_heading(language.text(Message::MobileConnections), cx)),
             )
             .child(row(
                 "mobile-lan-row",
                 language.text(Message::MobileLanDirect),
-                language.text(Message::MobileLanHint),
+                None,
                 NebulaSwitch::new("mobile-lan-enabled")
                     .checked(preferences.lan_enabled)
                     .disabled(busy)
@@ -826,15 +769,13 @@ impl SettingsPane {
             group = group.child(self.mobile_lan_options(false, cx));
         }
         let relay = self.mobile.snapshot.as_ref().and_then(|s| s.relay.as_ref());
-        let hint = relay
-            .map(|relay| {
-                format!("{} · {}", language.text(status_message(relay.status)), relay.address)
-            })
-            .unwrap_or_else(|| language.text(Message::MobileRelayHint).to_owned());
+        let status = relay.map(|relay| {
+            format!("{} · {}", language.text(status_message(relay.status)), relay.address).into()
+        });
         group.child(row(
             "mobile-relay-row",
             language.text(Message::MobileRelay),
-            hint,
+            status,
             Button::new("mobile-configure-relay")
                 .debug_selector(|| "mobile-configure-relay".into())
                 .map(|button| crate::gpui_shell::widgets::settings_button(button, true, cx))
@@ -858,14 +799,14 @@ impl SettingsPane {
             .child(row(
                 "mobile-default-permission-row",
                 language.text(Message::MobileDefaultPermission),
-                language.text(Message::MobileDefaultPermissionHint),
+                None,
                 self.mobile_permission_menu(None, cx),
                 cx,
             ))
             .child(row(
                 "mobile-notifications-row",
                 language.text(Message::MobileNotifications),
-                language.text(Message::MobileNotificationsHint),
+                None,
                 NebulaSwitch::new("mobile-notifications")
                     .checked(self.mobile.preferences().notifications)
                     .disabled(self.mobile.operation)
@@ -879,7 +820,7 @@ impl SettingsPane {
             .child(row(
                 "mobile-pause-row",
                 language.text(Message::MobilePauseTitle),
-                language.text(Message::MobilePauseHint),
+                None,
                 Button::new("mobile-pause")
                     .debug_selector(|| "mobile-pause".into())
                     .map(|button| crate::gpui_shell::widgets::settings_button(button, true, cx))

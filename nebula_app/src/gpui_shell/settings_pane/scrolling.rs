@@ -127,11 +127,6 @@ impl SettingsPane {
                     .flex_shrink_0()
                     .child(format!("{:.2}×", self.runtime.scroll_speed)),
             );
-        self.row(
-            language.text(Message::SettingsScrollingSpeed),
-            language.text(Message::SettingsScrollingSpeedDescription),
-            control,
-            cx,
-        )
+        self.row(language.text(Message::SettingsScrollingSpeed), control, cx)
     }
 }

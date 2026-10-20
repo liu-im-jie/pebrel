@@ -201,7 +201,7 @@ impl SettingsPane {
         .into_iter()
         .enumerate()
         {
-            let mut field = v_flex()
+            let field = v_flex()
                 .w_full()
                 .gap(px(6.0))
                 .child(
@@ -211,16 +211,7 @@ impl SettingsPane {
                         .child(text(label)),
                 )
                 .child(Input::new(&self.mobile.relay_inputs[index]).w_full().disabled(busy));
-            if index == 1 || index == 3 || index == 4 {
-                field = field.child(view::description(
-                    text(match index {
-                        1 => Message::MobileRelayRoomHint,
-                        3 => Message::MobileRelayTokensHint,
-                        _ => Message::MobileRelayPinHint,
-                    }),
-                    cx,
-                ));
-            }
+
             fields = fields.child(field);
         }
         let drawer = v_flex()
@@ -244,17 +235,12 @@ impl SettingsPane {
                     .border_b_1()
                     .border_color(cx.theme().border)
                     .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_size(px(18.0))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .child(text(Message::MobileRelay)),
-                            )
-                            .child(view::description(text(Message::MobileRelayDrawerSubtitle), cx)),
+                        v_flex().flex_1().min_w_0().gap_1().child(
+                            div()
+                                .text_size(px(18.0))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .child(text(Message::MobileRelay)),
+                        ),
                     )
                     .child(
                         Button::new("mobile-relay-close")
@@ -278,7 +264,6 @@ impl SettingsPane {
                                 .w_full()
                                 .gap_3()
                                 .child(view::group_heading(text(Message::MobileReadServer), cx))
-                                .child(view::description(text(Message::MobileReadServerHint), cx))
                                 .child(
                                     h_flex()
                                         .w_full()
@@ -362,8 +347,7 @@ impl SettingsPane {
                                     .text_color(cx.theme().danger)
                                     .child(text(view::failure_message(failure))),
                             )
-                        })
-                        .child(view::description(text(Message::MobileEncryptedHint), cx)),
+                        }),
                 ),
             )
             .child(

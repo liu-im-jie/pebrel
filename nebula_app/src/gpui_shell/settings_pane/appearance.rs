@@ -197,12 +197,7 @@ impl SettingsPane {
             if ui {
                 language.text(crate::i18n::Message::SettingsFontUiSize)
             } else {
-                language.pick("终端字号（Ctrl+滚轮缩放）", "Terminal font size (Ctrl+wheel)")
-            },
-            if ui {
-                language.text(crate::i18n::Message::SettingsFontUiSizeDescription)
-            } else {
-                language.pick("只调整终端文字大小。", "Changes only the terminal text size.")
+                language.text(crate::i18n::Message::SettingsFontTerminalSize)
             },
             stepper,
             cx,
@@ -218,37 +213,17 @@ impl SettingsPane {
         let language = crate::gpui_shell::config::ui_language(cx);
         let theme = self.appearance_trigger(true, window, cx);
         let icon = self.appearance_trigger(false, window, cx);
-        // 与开关、字体等设置共用行原语，字号、字重和说明缩放只维护一份。
+        // 与开关、字体等设置共用行原语，字号与字重只维护一份。
         let selectors = v_flex()
             .w_full()
-            .child(self.row(
-                language.pick("主题", "Theme"),
-                language.pick(
-                    "终端与界面的配色，统一选择。",
-                    "One palette for the terminal and interface.",
-                ),
-                theme,
-                cx,
-            ))
+            .child(self.row(language.pick("主题", "Theme"), theme, cx))
             .child(self.switch_row(
                 "follow_system_theme",
                 language.pick("跟随系统", "Follow system"),
-                language.pick(
-                    "随系统自动切换深浅色。",
-                    "Switches between light and dark with the system.",
-                ),
                 self.runtime.follow_system_theme,
                 cx,
             ))
-            .child(self.row(
-                language.pick("应用图标", "App icon"),
-                language.pick(
-                    "独立于主题，切换配色时保持不变。",
-                    "Independent of the theme; changing colors keeps the icon.",
-                ),
-                icon,
-                cx,
-            ));
+            .child(self.row(language.pick("应用图标", "App icon"), icon, cx));
         let settings = self.appearance_advanced_settings(window, cx);
         v_flex().w_full().gap(px(GROUP_GAP)).child(selectors).child(settings)
     }

@@ -1,19 +1,18 @@
 //! Storage field presentation shared by the setup wizard and storage drawer.
-use super::view::{caption, provider};
+use super::view::provider;
 use super::*;
 use gpui_component::menu::PopupMenuItem;
 
 pub(super) struct StorageField {
     pub label: Message,
     pub placeholder: Option<Message>,
-    hint: Option<Message>,
     mono: bool,
     pub secret: bool,
 }
 
 impl StorageField {
     const fn new(label: Message, placeholder: Option<Message>) -> Self {
-        Self { label, placeholder, hint: None, mono: false, secret: false }
+        Self { label, placeholder, mono: false, secret: false }
     }
     const fn mono(mut self) -> Self {
         self.mono = true;
@@ -21,10 +20,6 @@ impl StorageField {
     }
     const fn secret(mut self) -> Self {
         self.secret = true;
-        self
-    }
-    const fn hint(mut self, hint: Message) -> Self {
-        self.hint = Some(hint);
         self
     }
 }
@@ -41,8 +36,7 @@ pub(super) fn storage_fields(config: &BackupRemoteConfig) -> &'static [StorageFi
                         BackupFlowAppPasswordLabel,
                         Some(BackupFlowAppPasswordPlaceholder),
                     )
-                    .secret()
-                    .hint(BackupFlowAppPasswordHint),
+                    .secret(),
                 ]
             }
         },
@@ -50,8 +44,7 @@ pub(super) fn storage_fields(config: &BackupRemoteConfig) -> &'static [StorageFi
             const {
                 &[
                     StorageField::new(BackupFlowAddressLabel, Some(BackupFlowWebdavPlaceholder))
-                        .mono()
-                        .hint(BackupFlowWebdavAddressHint),
+                        .mono(),
                     StorageField::new(CloudUsername, Some(BackupFlowUsernamePlaceholder)),
                     StorageField::new(BackupFlowPasswordLabel, Some(BackupFlowPasswordPlaceholder))
                         .secret(),
@@ -61,9 +54,7 @@ pub(super) fn storage_fields(config: &BackupRemoteConfig) -> &'static [StorageFi
         BackupProtocol::S3 => {
             const {
                 &[
-                    StorageField::new(CloudS3Address, Some(BackupFlowS3Placeholder))
-                        .mono()
-                        .hint(BackupFlowS3AddressHint),
+                    StorageField::new(CloudS3Address, Some(BackupFlowS3Placeholder)).mono(),
                     StorageField::new(CloudRegion, None).mono(),
                     StorageField::new(CloudBucket, Some(BackupFlowBucketPlaceholder)).mono(),
                     StorageField::new(
@@ -82,7 +73,7 @@ pub(super) fn storage_fields(config: &BackupRemoteConfig) -> &'static [StorageFi
         BackupProtocol::Sftp => {
             const {
                 &[
-                    StorageField::new(BackupFlowSshHostLabel, None).hint(BackupFlowSshHostHint),
+                    StorageField::new(BackupFlowSshHostLabel, None),
                     StorageField::new(CloudRemotePath, Some(BackupFlowRemotePathPlaceholder))
                         .mono(),
                 ]
@@ -180,13 +171,12 @@ impl SettingsPane {
                         ),
                 );
             }
-            let description = v_flex()
+            let label = v_flex()
                 .gap(px(3.0))
                 .min_w_0()
                 .debug_selector(move || format!("backup-field-label-{index}"))
                 .when(!stacked, |d| d.flex_1())
-                .child(div().text_size(px(14.0)).font_medium().child(l.text(field.label)))
-                .when(!stacked, |d| d.children(field.hint.map(|hint| caption(l.text(hint), cx))));
+                .child(div().text_size(px(14.0)).font_medium().child(l.text(field.label)));
             fields = fields.child(
                 div()
                     .flex()
@@ -194,16 +184,11 @@ impl SettingsPane {
                     .py(px(12.0))
                     .when(stacked, |d| d.flex_col().gap_2())
                     .when(!stacked, |d| d.flex_row().items_center().gap(px(24.0)))
-                    .child(description)
-                    .child(control)
-                    .when(stacked, |d| {
-                        d.children(field.hint.map(|hint| caption(l.text(hint), cx)))
-                    }),
+                    .child(label)
+                    .child(control),
             );
         }
-        if stacked && matches!(protocol, BackupProtocol::WebDav | BackupProtocol::S3) {
-            fields = fields.child(caption(l.text(Message::BackupFlowCredentialHint), cx));
-        }
+
         fields
     }
 }

@@ -50,10 +50,6 @@ impl SettingsPane {
             ThemeTransferMode::Import => language.text(Message::ThemeTransferImportTitle),
             ThemeTransferMode::Export => language.text(Message::ThemeTransferExportTitle),
         };
-        let subtitle = match mode {
-            ThemeTransferMode::Import => language.text(Message::ThemeTransferImportDescription),
-            ThemeTransferMode::Export => language.text(Message::ThemeTransferExportDescription),
-        };
         let body = match mode {
             ThemeTransferMode::Import => self.theme_transfer_import_body(compact, colors, cx),
             ThemeTransferMode::Export => self.theme_transfer_export_body(compact, colors, cx),
@@ -110,22 +106,12 @@ impl SettingsPane {
                     .border_b_1()
                     .border_color(colors.line)
                     .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .gap(px(5.0))
-                            .child(
-                                div()
-                                    .text_size(px(if compact { 17.0 } else { 19.0 }))
-                                    .font_semibold()
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(11.0))
-                                    .text_color(colors.secondary)
-                                    .child(subtitle),
-                            ),
+                        v_flex().flex_1().min_w_0().gap(px(5.0)).child(
+                            div()
+                                .text_size(px(if compact { 17.0 } else { 19.0 }))
+                                .font_semibold()
+                                .child(title),
+                        ),
                     )
                     .child(
                         h_flex()

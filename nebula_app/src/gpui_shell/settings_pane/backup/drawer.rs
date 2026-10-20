@@ -12,29 +12,18 @@ impl SettingsPane {
         let sheet = self.backup_ui.sheet?;
         let l = crate::gpui_shell::config::ui_language(cx);
         let focus = self.backup_ui.sheet_focus.as_ref()?;
-        let (title, lead, action) = match sheet {
-            BackupSheet::Storage => {
-                (Message::BackupFlowStorage, Message::BackupFlowStorageHint, Message::CommonSave)
-            },
-            BackupSheet::Backup => {
-                (Message::CloudBackupNow, Message::BackupFlowUploadHint, Message::BackupFlowStart)
-            },
-            BackupSheet::Export => {
-                (Message::CloudExport, Message::BackupFlowExportHint, Message::CloudExport)
-            },
-            BackupSheet::Restore => {
-                (Message::CloudRestore, Message::BackupFlowRestoreHint, Message::CloudRestore)
-            },
-            BackupSheet::Password => {
-                (Message::CloudPassphrase, Message::BackupFlowPasswordHint, Message::CommonSave)
-            },
+        let (title, action) = match sheet {
+            BackupSheet::Storage => (Message::BackupFlowStorage, Message::CommonSave),
+            BackupSheet::Backup => (Message::CloudBackupNow, Message::BackupFlowStart),
+            BackupSheet::Export => (Message::CloudExport, Message::CloudExport),
+            BackupSheet::Restore => (Message::CloudRestore, Message::CloudRestore),
+            BackupSheet::Password => (Message::CloudPassphrase, Message::CommonSave),
         };
         let cached = cx.try_global::<BackupPassword>().is_some_and(|p| p.0.is_some());
         let mut body = v_flex().w_full().gap_4();
         body = match sheet {
             BackupSheet::Storage => body
                 .child(self.backup_provider_menu(cx))
-                .child(caption(l.text(Message::BackupFlowSwitchHint), cx))
                 .child(self.backup_storage_fields(true, cx))
                 .child(
                     Button::new("backup-check")
@@ -45,14 +34,9 @@ impl SettingsPane {
                             this.check_backup_connection(false, window, cx)
                         })),
                 )
-                .child(caption(
-                    l.text(if self.backup_ui.tested {
-                        Message::BackupFlowConnected
-                    } else {
-                        Message::BackupFlowReadOnlyCheck
-                    }),
-                    cx,
-                )),
+                .when(self.backup_ui.tested, |body| {
+                    body.child(caption(l.text(Message::BackupFlowConnected), cx))
+                }),
             BackupSheet::Backup | BackupSheet::Export => body
                 .child(
                     h_flex()
@@ -72,7 +56,6 @@ impl SettingsPane {
                         ),
                 )
                 .child(self.backup_content_picker(false, false, cx))
-                .child(caption(l.text(Message::BackupFlowExcluded), cx))
                 .when(!cached, |d| d.child(self.backup_password_field(cx))),
             BackupSheet::Restore => {
                 let source = match &self.backup_ui.source {
@@ -84,9 +67,7 @@ impl SettingsPane {
                 };
                 body = body.child(caption(source, cx));
                 if self.backup_ui.opened.is_some() {
-                    body.child(caption(l.text(Message::BackupFlowUnselectedUntouched), cx))
-                        .child(self.backup_content_picker(false, true, cx))
-                        .child(caption(l.text(Message::BackupFlowRestoreWarning), cx))
+                    body.child(self.backup_content_picker(false, true, cx))
                 } else {
                     body.child(self.backup_password_field(cx)).child(
                         Button::new("backup-unlock")
@@ -145,8 +126,7 @@ impl SettingsPane {
                             .gap_2()
                             .flex_1()
                             .min_w_0()
-                            .child(div().text_size(px(18.0)).font_semibold().child(l.text(title)))
-                            .child(caption(l.text(lead), cx)),
+                            .child(div().text_size(px(18.0)).font_semibold().child(l.text(title))),
                     )
                     .child(
                         Button::new("backup-close-drawer")
@@ -275,6 +255,5 @@ impl SettingsPane {
             .gap_2()
             .child(l.text(Message::CloudPassphrase))
             .child(Input::new(&self.backup_pass_input).h(px(34.0)).disabled(self.backup_busy))
-            .child(caption(l.text(Message::BackupFlowPasswordHint), cx))
     }
 }

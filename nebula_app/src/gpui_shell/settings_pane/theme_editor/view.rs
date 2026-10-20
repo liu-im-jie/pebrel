@@ -486,22 +486,12 @@ impl SettingsPane {
                                     })),
                             )
                             .child(
-                                v_flex()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .gap(px(3.0))
-                                    .child(
-                                        div()
-                                            .text_size(px(22.0))
-                                            .font_semibold()
-                                            .child(language.text(Message::ThemeEditorTitle)),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .text_color(colors.secondary)
-                                            .child(language.text(Message::ThemeEditorDescription)),
-                                    ),
+                                v_flex().min_w_0().flex_1().gap(px(3.0)).child(
+                                    div()
+                                        .text_size(px(22.0))
+                                        .font_semibold()
+                                        .child(language.text(Message::ThemeEditorTitle)),
+                                ),
                             ),
                     )
                     .child(
@@ -743,11 +733,6 @@ impl SettingsPane {
                         ),
                 )
         };
-        let source_name = editor
-            .templates
-            .get(editor.selected_index())
-            .map(|template| template.label.to_string())
-            .unwrap_or_else(|| editor.draft.name.clone());
         let contrast = nebula_settings::wcag_contrast_ratio(
             editor.draft.terminal.foreground,
             editor.draft.terminal.background,
@@ -757,45 +742,38 @@ impl SettingsPane {
             .flex_1()
             .gap(px(24.0))
             .child(
-                v_flex()
-                    .gap(px(12.0))
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .gap(px(16.0))
-                            .child(
-                                v_flex()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .gap(px(7.0))
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .text_color(colors.secondary)
-                                            .child(language.text(Message::ThemeEditorTemplate)),
-                                    )
-                                    .child(
-                                        div()
-                                            .debug_selector(|| "theme-editor-template".to_owned())
-                                            .w_full()
-                                            .child(
-                                                Select::new(&editor.template_select)
-                                                    .w_full()
-                                                    .disabled(
-                                                        save_busy || editor.templates_loading,
-                                                    ),
-                                            ),
-                                    ),
-                            )
-                            .child(field(
-                                "theme-editor-name",
-                                language.text(Message::ThemeEditorName),
-                                &editor.name_input,
-                            )),
-                    )
-                    .child(div().text_size(px(11.0)).text_color(colors.secondary).child(
-                        language.format(Message::ThemeEditorBasedOn, &[("name", &source_name)]),
-                    )),
+                v_flex().gap(px(12.0)).child(
+                    h_flex()
+                        .w_full()
+                        .gap(px(16.0))
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap(px(7.0))
+                                .child(
+                                    div()
+                                        .text_size(px(11.0))
+                                        .text_color(colors.secondary)
+                                        .child(language.text(Message::ThemeEditorTemplate)),
+                                )
+                                .child(
+                                    div()
+                                        .debug_selector(|| "theme-editor-template".to_owned())
+                                        .w_full()
+                                        .child(
+                                            Select::new(&editor.template_select)
+                                                .w_full()
+                                                .disabled(save_busy || editor.templates_loading),
+                                        ),
+                                ),
+                        )
+                        .child(field(
+                            "theme-editor-name",
+                            language.text(Message::ThemeEditorName),
+                            &editor.name_input,
+                        )),
+                ),
             )
             .when(editor.templates_loading, |view| {
                 view.child(

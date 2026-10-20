@@ -6,9 +6,9 @@ struct SegmentsHost(Entity<SettingsPane>, &'static str);
 impl Render for SegmentsHost {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focus = self.0.read(cx).focus_handle.clone();
-        div().size_full().track_focus(&focus).child(self.0.update(cx, |pane, cx| {
-            pane.select_row(self.1, "Choice", "Description", cx).into_any_element()
-        }))
+        div().size_full().track_focus(&focus).child(
+            self.0.update(cx, |pane, cx| pane.select_row(self.1, "Choice", cx).into_any_element()),
+        )
     }
 }
 

@@ -152,12 +152,6 @@ impl SettingsPane {
                             .on_click(cx.listener(|this, _, _, cx| this.refresh_agents(cx))),
                     ),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(muted)
-                    .child(language.text(Message::SettingsAgentsDescription)),
-            )
             .when(!crate::platform::CAPABILITIES.ai_hook_server, |view| {
                 view.child(
                     div()
@@ -175,12 +169,6 @@ impl SettingsPane {
                 )
             })
             .child(list)
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(muted)
-                    .child(language.text(Message::SettingsAgentsRestart)),
-            )
     }
 
     fn agent_hook_row(

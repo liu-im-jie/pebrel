@@ -89,7 +89,7 @@
       "auth_auto_description": "Essaie d’abord les clés privées disponibles, puis demande un mot de passe. Ce mode convient à la plupart des cas.",
       "auth_interactive_description": "Ne conserve aucun identifiant et les demande dans le terminal à la connexion, y compris pour l’authentification à deux facteurs.",
       "save_password": "Enregistrer dans le Gestionnaire d’identifiants Windows",
-      "hide_config_host": "Masquer (les sources de configuration ne peuvent pas être supprimées)",
+      "hide_config_host": "Masquer",
       "empty_hint": "Utilisez « + Ajouter un hôte » ou gérez les alias dans ~/.ssh/config",
       "shared_data_hint": "Partage les données avec l’ancienne interface. Supprimer un alias de configuration le masque ; il peut être restauré."
     }

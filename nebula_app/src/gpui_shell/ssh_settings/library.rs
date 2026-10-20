@@ -369,14 +369,6 @@ impl SettingsPane {
                             ),
                     ),
             )
-            .child(
-                div()
-                    .max_w(px(598.0))
-                    .text_size(px(13.0))
-                    .line_height(px(21.0))
-                    .text_color(cx.theme().muted_foreground)
-                    .child(language.text(Message::HostsListSubtitle)),
-            )
             .into_any_element()
     }
 
@@ -786,23 +778,9 @@ impl SettingsPane {
                     .bg(theme.foreground.opacity(0.028))
                     .when(host_count > 0, |card| card.child(host_rows))
                     .when(host_count == 0, |card| {
-                        card.child(
-                            v_flex()
-                                .py_6()
-                                .gap_1()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_color(muted)
-                                        .child(language.text(Message::HostsNoMatches)),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted)
-                                        .child(language.tr("settings.ssh.empty_hint")),
-                                ),
-                        )
+                        card.child(v_flex().py_6().gap_1().items_center().child(
+                            div().text_color(muted).child(language.text(Message::HostsNoMatches)),
+                        ))
                     })
                     .when_some(hidden_rows, |panel, rows| {
                         panel.child(v_flex().w_full().children(rows))

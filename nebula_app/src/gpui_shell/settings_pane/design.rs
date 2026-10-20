@@ -1,6 +1,6 @@
 //! 设置页的设计 token 与行原语。
 //!
-//! 分组标题使用更大、加粗的主文本；设置项名称和说明留在左列，控件在右列
+//! 分组标题使用更大、加粗的主文本；设置项名称留在左列，控件在右列
 //! 垂直居中。标准密度沿用原紧凑间距，紧凑档只再微收；字号、命中区域和窗口
 //! 标题栏不随内容密度缩小。分组通过留白表达，不添加标题下横线。
 
@@ -10,13 +10,10 @@ use gpui::{Animation, AnimationExt as _, ElementId, FontWeight, ease_out_quint, 
 
 use super::*;
 
-/// 说明文字相对正文的字号比。全页只有两档字号：正文走用户基准字号，说明小
-/// 一档。
+/// 次要信息相对正文的字号比。
 pub(super) const DESC_SCALE: f32 = 0.82;
 /// Parent headings stay above item labels in the visual hierarchy.
 const GROUP_TITLE_SCALE: f32 = 16.0 / 14.0;
-/// label ↔ 说明。这 4px 在说"这两行是同一件事"。
-const LABEL_DESC_GAP: f32 = 4.0;
 /// 标准密度沿用原紧凑档的行留白；间距只由行内 padding 提供。
 const ROW_PAD_Y: f32 = 12.0;
 /// 紧凑档只再收紧少量留白，字号与控件命中区域保持不变。
@@ -90,15 +87,14 @@ impl SettingsPane {
         div().w_full().h(px(GROUP_GAP - 8.0)).flex_shrink_0()
     }
 
-    /// 设置行。`desc` 写后果；确实无后果可说的项才传空串（尽量不要有）。
+    /// 设置行显示名称和控件。
     pub(crate) fn row(
         &self,
         label: &'static str,
-        desc: impl Into<SettingHelp>,
         control: impl IntoElement,
         cx: &Context<Self>,
     ) -> impl IntoElement {
-        self.row_shell(label, desc.into(), None, false, RowLayout::Standard, control, cx)
+        self.row_shell(label, None, false, RowLayout::Standard, control, cx)
     }
 
     /// 带撤销的设置行：该项被覆盖过时，左侧轨道这一段亮起来，行内出现 ↶。
@@ -109,19 +105,17 @@ impl SettingsPane {
     pub(crate) fn row_with_reset(
         &self,
         label: &'static str,
-        desc: impl Into<SettingHelp>,
         dirty: bool,
         on_reset: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
         control: impl IntoElement,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        self.row_with_reset_layout(label, desc, dirty, on_reset, RowLayout::Standard, control, cx)
+        self.row_with_reset_layout(label, dirty, on_reset, RowLayout::Standard, control, cx)
     }
 
     pub(super) fn row_with_reset_layout(
         &self,
         label: &'static str,
-        desc: impl Into<SettingHelp>,
         dirty: bool,
         on_reset: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
         layout: RowLayout,
@@ -152,7 +146,7 @@ impl SettingsPane {
                 .child(Icon::new(IconName::Undo2).size(px(16.0)))
                 .into_any_element()
         });
-        self.row_shell(label, desc.into(), reset, dirty, layout, control, cx)
+        self.row_shell(label, reset, dirty, layout, control, cx)
     }
 
     /// 行 hover 组名。↶ 要跟着**整行**的 hover 显形，而不是自己被指到才现
@@ -161,51 +155,9 @@ impl SettingsPane {
         SharedString::from(format!("settings-row-{label}"))
     }
 
-    /// 说明文字。反引号包起来的片段走等宽——这是全页 mono 唯一的用途。
-    ///
-    /// 我们是终端，所以等宽在界面里不能当默认字体用，否则它什么也没说。
-    /// 让它只出现在路径、键帽、配置键名这类**机器读的字面量**上，它才变成
-    /// 一个信号：这几个字符是可以照抄的，一个也不能改。
-    ///
-    /// 直接拼 `div` 做不到这件事——那样每段会各占一个 flex 盒子，一句话被
-    /// 切成几块、还断不了行。所以走 `StyledText` 的 run：同一次排版里换字体，
-    /// 换行照旧。
-    fn desc_text(desc: &'static str, cx: &Context<Self>) -> gpui::AnyElement {
-        if !desc.contains('`') {
-            return desc.into_any_element();
-        }
-        let theme = cx.theme();
-        let sans = crate::gpui_shell::typography::ui_font(cx);
-        let mono = gpui::font(theme.mono_font_family.clone());
-        let (dim, ink) = (theme.muted_foreground, theme.foreground);
-
-        let mut text = String::with_capacity(desc.len());
-        let mut runs: Vec<gpui::TextRun> = Vec::new();
-        // 奇数段在反引号内。反引号本身不进最终文本，它只是标记。
-        for (ix, piece) in desc.split('`').enumerate() {
-            if piece.is_empty() {
-                continue;
-            }
-            let literal = ix % 2 == 1;
-            text.push_str(piece);
-            runs.push(gpui::TextRun {
-                len: piece.len(),
-                font: if literal { mono.clone() } else { sans.clone() },
-                // 字面量比周围说明亮一档：字体已经把它分出来了，颜色再补一点
-                // 权重，扫视时才不至于滑过去。
-                color: if literal { ink } else { dim },
-                background_color: None,
-                underline: None,
-                strikethrough: None,
-            });
-        }
-        gpui::StyledText::new(text).with_runs(runs).into_any_element()
-    }
-
     pub(super) fn row_shell(
         &self,
         label: &'static str,
-        desc: SettingHelp,
         reset: Option<gpui::AnyElement>,
         dirty: bool,
         layout: RowLayout,
@@ -214,68 +166,21 @@ impl SettingsPane {
     ) -> impl IntoElement {
         let theme = cx.theme();
         let base_px = self.font_size_px(cx);
-        let expanded = self.expanded_setting_help.contains(label);
         let pad_y = self.row_padding_y();
-        let text = v_flex()
-            .child(
-                h_flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .text_size(px(base_px))
-                            .font_weight(FontWeight::NORMAL)
-                            .text_color(theme.foreground)
-                            .child(label),
-                    )
-                    .when(desc.details.is_some(), |heading| {
-                        let language = crate::gpui_shell::config::ui_language(cx);
-                        let action = if expanded {
-                            language.pick("收起说明", "Hide details")
-                        } else {
-                            language.pick("详细说明", "More details")
-                        };
-                        heading.child(
-                            Button::new(SharedString::from(format!("settings-help-{label}")))
-                                .icon(IconName::Info)
-                                .ghost()
-                                .size(px(32.0))
-                                .text_color(theme.muted_foreground)
-                                .accessibility_id(SharedString::from(format!(
-                                    "settings-help-{label}"
-                                )))
-                                .toggled(expanded)
-                                .tooltip(format!("{label}: {action}"))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    if !this.expanded_setting_help.insert(label) {
-                                        this.expanded_setting_help.remove(label);
-                                    }
-                                    cx.notify();
-                                })),
-                        )
-                    })
-                    .children(reset),
-            )
-            .when(!desc.summary.is_empty(), |text| {
-                text.child(
+        let text = v_flex().child(
+            h_flex()
+                .items_center()
+                .gap_1()
+                .child(
                     div()
-                        .mt(px(LABEL_DESC_GAP))
-                        .text_size(px(base_px * DESC_SCALE))
+                        .min_w_0()
+                        .text_size(px(base_px))
                         .font_weight(FontWeight::NORMAL)
-                        .text_color(theme.muted_foreground)
-                        .child(Self::desc_text(desc.summary, cx)),
+                        .text_color(theme.foreground)
+                        .child(label),
                 )
-            })
-            .when_some(desc.details.filter(|_| expanded), |text, details| {
-                text.child(
-                    div()
-                        .mt(px(8.0))
-                        .text_size(px(base_px * DESC_SCALE))
-                        .text_color(theme.muted_foreground)
-                        .child(Self::desc_text(details, cx)),
-                )
-            });
+                .children(reset),
+        );
         let control = control.into_any_element();
         let columns = match layout {
             RowLayout::IntrinsicControl => {

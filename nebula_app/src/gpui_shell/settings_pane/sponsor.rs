@@ -1,7 +1,4 @@
-//! 设置首页「项目与支持」下的赞助商页：左侧品牌贴图、右侧介绍与注册链接。
-//!
-//! 不做成外链行：外链行一点就跳浏览器，赞助商介绍在应用里就该读得到；
-//! 页面只提供一条明确的注册链接，点它才离开应用。
+//! 设置首页「项目与支持」下的赞助商页：品牌贴图、名称与注册链接。
 
 use std::sync::{Arc, OnceLock};
 
@@ -82,10 +79,7 @@ impl SettingsPane {
             .text_color(link)
             .hover(|row| row.underline())
             .on_click(|_, _, cx| cx.open_url(SPONSOR_URL))
-            .child(language.pick(
-                "立即访问并注册，即可获得 $3 API 额度",
-                "Sign up now to receive $3 in API credit",
-            ))
+            .child(language.text(crate::i18n::Message::CommonOpen))
             .child(Icon::new(IconName::ExternalLink).xsmall());
 
         let copy = v_flex()
@@ -99,20 +93,6 @@ impl SettingsPane {
                     .text_color(ink)
                     .child(SPONSOR_NAME),
             )
-            .child(div().text_color(ink).child(language.pick(
-                "一个入口，接入并管理全球主流 AI 模型",
-                "One entry point to access and manage the world's leading AI models",
-            )))
-            .child(div().text_color(muted).line_height(px(base_px * 1.6)).child(language.pick(
-                "Fluxion AI 面向个人开发者、技术团队与企业，通过统一 API 接入并管理全球主流 AI 模型；\
-                 通过多线路动态调度提升可用性，模型表现、响应时间与费用透明可查。\
-                 根据不同模型与线路，API 调用成本较官方或基准价格可降低 40%—98%。",
-                "Fluxion AI serves individual developers, technical teams and enterprises with a \
-                 unified API for accessing and managing mainstream AI models worldwide. Dynamic \
-                 multi-route scheduling improves availability, and model performance, response \
-                 time and cost stay transparent. Depending on the model and route, API calls can \
-                 cost 40%–98% less than official or benchmark prices.",
-            )))
             .child(register);
 
         v_flex()

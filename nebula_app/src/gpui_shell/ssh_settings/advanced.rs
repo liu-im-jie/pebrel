@@ -1,4 +1,4 @@
-use super::editor::{editor_field, editor_hint, editor_input};
+use super::editor::{editor_field, editor_input};
 use super::*;
 use crate::ssh_profiles::{SshConnectionOptions, SshHostJumpMode, SshHostProxyMode};
 
@@ -453,176 +453,247 @@ impl SettingsPane {
             })
             .collect::<Vec<_>>();
         let destination = self.ssh_destination_from_draft(cx).unwrap_or_default();
-        let route = self.ssh_connection_from_draft(&destination, cx).ok().map(|connection| {
-            let mut steps = vec![language.pick("本机", "Local").to_owned()];
-            match connection.proxy_mode {
-                SshHostProxyMode::Inherit => {
-                    steps.push(language.pick("全局网络规则", "Global network rules").to_owned())
-                },
-                SshHostProxyMode::Direct => {},
-                SshHostProxyMode::Socks5 | SshHostProxyMode::Http => steps.push(format!(
-                    "{} {}:{}",
-                    if connection.proxy_mode == SshHostProxyMode::Socks5 {
-                        "SOCKS5"
-                    } else {
-                        "HTTP"
-                    },
-                    connection.proxy_host,
-                    connection.effective_proxy_port(),
-                )),
-            }
-            match connection.jump_mode {
-                SshHostJumpMode::Inherit => steps
-                    .push(language.pick("SSH config 跳板规则", "SSH config jump rules").to_owned()),
-                SshHostJumpMode::None => {},
-                SshHostJumpMode::Host => steps.push(connection.jump_host),
-            }
-            steps.push(if destination.is_empty() {
-                language.pick("目标主机", "Target host").to_owned()
-            } else {
-                destination.clone()
-            });
-            steps.join(" → ")
-        });
         v_flex()
             .w_full()
             .child(div().text_xs().font_medium().child(language.pick("网络代理", "Network proxy")))
-            .child(editor_hint(language.pick(
-                "仅覆盖这台主机，不改变全局网络设置。",
-                "Applies to this host without changing global network settings.",
-            ), cx).mt_1())
-            .child(h_flex().mt_3().p(px(3.0)).rounded_lg().bg(theme.input)
-                .child(crate::gpui_shell::widgets::segmented::SegmentedRow::new(
-                    "ssh-proxy-modes", selected_proxy,
-                    h_flex().w_full().h(px(30.0)).gap(px(3.0)).children(proxy_buttons),
-                    div().rounded(px(5.0)).bg(theme.popover).shadow_sm(),
-                ).w_full()))
+            .child(
+                h_flex().mt_3().p(px(3.0)).rounded_lg().bg(theme.input).child(
+                    crate::gpui_shell::widgets::segmented::SegmentedRow::new(
+                        "ssh-proxy-modes",
+                        selected_proxy,
+                        h_flex().w_full().h(px(30.0)).gap(px(3.0)).children(proxy_buttons),
+                        div().rounded(px(5.0)).bg(theme.popover).shadow_sm(),
+                    )
+                    .w_full(),
+                ),
+            )
             .when(custom_proxy, |body| {
                 body.child(
-                    h_flex().mt_4().gap_3().items_start()
+                    h_flex()
+                        .mt_4()
+                        .gap_3()
+                        .items_start()
                         .child(div().flex_1().min_w_0().child(editor_field(
                             language.pick("代理地址", "Proxy host"),
-                            editor_input(&self.ssh_proxy_host_input, language.pick("代理地址", "Proxy host"), window, cx),
+                            editor_input(
+                                &self.ssh_proxy_host_input,
+                                language.pick("代理地址", "Proxy host"),
+                                window,
+                                cx,
+                            ),
                         )))
                         .child(div().w(px(84.0)).flex_shrink_0().child(editor_field(
                             language.pick("端口", "Port"),
-                            editor_input(&self.ssh_proxy_port_input, language.pick("代理端口", "Proxy port"), window, cx),
+                            editor_input(
+                                &self.ssh_proxy_port_input,
+                                language.pick("代理端口", "Proxy port"),
+                                window,
+                                cx,
+                            ),
                         ))),
                 )
                 .child(
-                    h_flex().mt_4().gap_3().items_start()
+                    h_flex()
+                        .mt_4()
+                        .gap_3()
+                        .items_start()
                         .child(div().flex_1().min_w_0().child(editor_field(
-                            language.pick("用户名（可选）", "Username (optional)"),
-                            editor_input(&self.ssh_proxy_username_input, language.pick("代理用户名", "Proxy username"), window, cx),
+                            language.pick("用户名", "Username"),
+                            editor_input(
+                                &self.ssh_proxy_username_input,
+                                language.pick("代理用户名", "Proxy username"),
+                                window,
+                                cx,
+                            ),
                         )))
-                        .child(div().flex_1().min_w_0().child(editor_field(
-                            language.pick("密码（可选）", "Password (optional)"),
-                            editor_input(&self.ssh_proxy_password_input, language.pick("代理密码", "Proxy password"), window, cx)
-                                .mask_toggle().disabled(editor.clear_proxy_password),
-                        ))),
+                        .child(
+                            div().flex_1().min_w_0().child(editor_field(
+                                language.pick("密码", "Password"),
+                                editor_input(
+                                    &self.ssh_proxy_password_input,
+                                    language.pick("代理密码", "Proxy password"),
+                                    window,
+                                    cx,
+                                )
+                                .mask_toggle()
+                                .disabled(editor.clear_proxy_password),
+                            )),
+                        ),
                 )
-                .child(editor_hint(language.pick(
-                    "代理密码仅保存在系统凭据库，不写入主机配置。",
-                    "Proxy passwords stay in the system credential store, never in host configuration.",
-                ), cx).mt_2())
                 .when(editor.original_destination.is_some(), |body| {
                     body.child(
                         div().mt_2().child(
-                            Checkbox::new("ssh-clear-proxy-password").small()
+                            Checkbox::new("ssh-clear-proxy-password")
+                                .small()
                                 .checked(editor.clear_proxy_password)
-                                .label(language.pick("清除已保存的代理密码", "Remove the saved proxy password"))
+                                .label(language.pick(
+                                    "清除已保存的代理密码",
+                                    "Remove the saved proxy password",
+                                ))
                                 .on_click(cx.listener(|this, value: &bool, window, cx| {
                                     if let Some(editor) = this.ssh_editor.as_mut() {
                                         editor.clear_proxy_password = *value;
                                     }
                                     if *value {
-                                        this.ssh_proxy_password_input.update(cx, |input, cx| input.set_value("", window, cx));
+                                        this.ssh_proxy_password_input.update(cx, |input, cx| {
+                                            input.set_value("", window, cx)
+                                        });
                                     }
                                     this.touch_ssh_editor(cx);
                                 })),
                         ),
                     )
                 })
-                .when(editor.connection.proxy_mode == SshHostProxyMode::Http, |body| {
-                    body.child(editor_hint(language.pick(
-                        "HTTP CONNECT 代理；代理认证本身不使用 TLS，请仅在可信网络中使用。",
-                        "HTTP CONNECT; proxy authentication is not protected by TLS. Use a trusted network.",
-                    ), cx).mt_2())
-                })
             })
             .child(
-                v_flex().mt_5().pt_5().border_t_1().border_color(theme.border)
-                    .child(div().text_xs().font_medium().child(language.pick("SSH 跳板机", "SSH jump host")))
-                    .child(h_flex().mt_3().p(px(3.0)).rounded_lg().bg(theme.input)
-                        .child(crate::gpui_shell::widgets::segmented::SegmentedRow::new(
-                            "ssh-jump-modes", selected_jump,
-                            h_flex().w_full().h(px(30.0)).gap(px(3.0)).children(jump_buttons),
-                            div().rounded(px(5.0)).bg(theme.popover).shadow_sm(),
-                        ).w_full()))
+                v_flex()
+                    .mt_5()
+                    .pt_5()
+                    .border_t_1()
+                    .border_color(theme.border)
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_medium()
+                            .child(language.pick("SSH 跳板机", "SSH jump host")),
+                    )
+                    .child(
+                        h_flex().mt_3().p(px(3.0)).rounded_lg().bg(theme.input).child(
+                            crate::gpui_shell::widgets::segmented::SegmentedRow::new(
+                                "ssh-jump-modes",
+                                selected_jump,
+                                h_flex().w_full().h(px(30.0)).gap(px(3.0)).children(jump_buttons),
+                                div().rounded(px(5.0)).bg(theme.popover).shadow_sm(),
+                            )
+                            .w_full(),
+                        ),
+                    )
                     .when(editor.connection.jump_mode == SshHostJumpMode::Host, |section| {
                         section.child(
-                            v_flex().mt_4().gap_2()
+                            v_flex()
+                                .mt_4()
+                                .gap_2()
                                 .child(
-                                    h_flex().justify_between().items_center()
-                                        .child(div().text_xs().font_medium().child(language.pick("跳板主机", "Jump host")))
+                                    h_flex()
+                                        .justify_between()
+                                        .items_center()
                                         .child(
-                                            Button::new("ssh-jump-choose-saved").ghost().xsmall()
-                                                .label(language.pick("从已保存主机选择", "Choose saved host"))
-                                                .icon(if editor.jump_picker_open { IconName::ChevronUp } else { IconName::ChevronDown })
+                                            div()
+                                                .text_xs()
+                                                .font_medium()
+                                                .child(language.pick("跳板主机", "Jump host")),
+                                        )
+                                        .child(
+                                            Button::new("ssh-jump-choose-saved")
+                                                .ghost()
+                                                .xsmall()
+                                                .label(
+                                                    language.pick(
+                                                        "从已保存主机选择",
+                                                        "Choose saved host",
+                                                    ),
+                                                )
+                                                .icon(if editor.jump_picker_open {
+                                                    IconName::ChevronUp
+                                                } else {
+                                                    IconName::ChevronDown
+                                                })
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     if let Some(editor) = this.ssh_editor.as_mut() {
-                                                        editor.jump_picker_open = !editor.jump_picker_open;
+                                                        editor.jump_picker_open =
+                                                            !editor.jump_picker_open;
                                                     }
                                                     cx.notify();
                                                 })),
                                         ),
                                 )
-                                .child(editor_input(&self.ssh_jump_host_input, language.pick("跳板主机", "Jump host"), window, cx))
+                                .child(editor_input(
+                                    &self.ssh_jump_host_input,
+                                    language.pick("跳板主机", "Jump host"),
+                                    window,
+                                    cx,
+                                ))
                                 .when(editor.jump_picker_open, |section| {
-                                    let choices = editor.jump_choices.iter().filter(|(host, _)| host != &destination).collect::<Vec<_>>();
+                                    let choices = editor
+                                        .jump_choices
+                                        .iter()
+                                        .filter(|(host, _)| host != &destination)
+                                        .collect::<Vec<_>>();
                                     if choices.is_empty() {
-                                        return section.child(editor_hint(language.pick(
-                                            "没有其他已保存主机；可直接填写地址或 SSH config 别名。",
-                                            "No other saved hosts. Enter an address or SSH config alias.",
-                                        ), cx));
+                                        return section;
                                     }
                                     section.child(
-                                        v_flex().h(px((choices.len() as f32 * 42.0).min(168.0)))
-                                            .overflow_y_scrollbar().rounded_md().border_1().border_color(theme.border)
-                                            .child(v_flex().children(choices.into_iter().enumerate().map(|(index, (host, label))| {
-                                                let host = host.clone();
-                                                let selected = host == self.ssh_jump_host_input.read(cx).value().as_ref();
-                                                v_flex().id(SharedString::from(format!("ssh-jump-choice-{index}")))
-                                                    .w_full().h(px(42.0)).px_3().justify_center()
-                                                    .cursor_pointer().hover(|row| row.bg(theme.list_hover))
-                                                    .when(selected, |row| row.bg(theme.list_active))
-                                                    .child(div().text_sm().truncate().child(label.clone()))
-                                                    .child(div().text_xs().text_color(theme.muted_foreground).truncate().child(host.clone()))
-                                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                                        this.ssh_jump_host_input.update(cx, |input, cx| input.set_value(host.clone(), window, cx));
-                                                        if let Some(editor) = this.ssh_editor.as_mut() {
-                                                            editor.jump_picker_open = false;
-                                                        }
-                                                        this.touch_ssh_editor(cx);
-                                                    }))
-                                            }))),
+                                        v_flex()
+                                            .h(px((choices.len() as f32 * 42.0).min(168.0)))
+                                            .overflow_y_scrollbar()
+                                            .rounded_md()
+                                            .border_1()
+                                            .border_color(theme.border)
+                                            .child(v_flex().children(
+                                                choices.into_iter().enumerate().map(
+                                                    |(index, (host, label))| {
+                                                        let host = host.clone();
+                                                        let selected = host
+                                                            == self
+                                                                .ssh_jump_host_input
+                                                                .read(cx)
+                                                                .value()
+                                                                .as_ref();
+                                                        v_flex()
+                                                            .id(SharedString::from(format!(
+                                                                "ssh-jump-choice-{index}"
+                                                            )))
+                                                            .w_full()
+                                                            .h(px(42.0))
+                                                            .px_3()
+                                                            .justify_center()
+                                                            .cursor_pointer()
+                                                            .hover(|row| row.bg(theme.list_hover))
+                                                            .when(selected, |row| {
+                                                                row.bg(theme.list_active)
+                                                            })
+                                                            .child(
+                                                                div()
+                                                                    .text_sm()
+                                                                    .truncate()
+                                                                    .child(label.clone()),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .text_xs()
+                                                                    .text_color(
+                                                                        theme.muted_foreground,
+                                                                    )
+                                                                    .truncate()
+                                                                    .child(host.clone()),
+                                                            )
+                                                            .on_click(cx.listener(
+                                                                move |this, _, window, cx| {
+                                                                    this.ssh_jump_host_input
+                                                                        .update(cx, |input, cx| {
+                                                                            input.set_value(
+                                                                                host.clone(),
+                                                                                window,
+                                                                                cx,
+                                                                            )
+                                                                        });
+                                                                    if let Some(editor) =
+                                                                        this.ssh_editor.as_mut()
+                                                                    {
+                                                                        editor.jump_picker_open =
+                                                                            false;
+                                                                    }
+                                                                    this.touch_ssh_editor(cx);
+                                                                },
+                                                            ))
+                                                    },
+                                                ),
+                                            )),
                                     )
                                 })
                                 .child(self.ssh_jump_authentication(window, cx)),
                         )
-                    })
-                    .child(editor_hint(language.pick(
-                        "网络代理用于连接第一台 SSH 主机，再由跳板转发到目标。",
-                        "The network proxy connects to the first SSH host; the jump host forwards to the target.",
-                    ), cx).mt_3()),
-            )
-            .child(
-                v_flex().mt_5().p_3().gap_2().rounded_md().bg(theme.group_box)
-                    .child(div().text_xs().font_medium().child(language.pick("连接规则预览", "Connection rule preview")))
-                    .child(editor_hint(route.unwrap_or_else(|| language.pick(
-                        "填写有效的代理和跳板信息后显示连接规则。",
-                        "Enter valid proxy and jump host details to preview the connection rules.",
-                    ).to_owned()), cx)),
+                    }),
             )
     }
 }

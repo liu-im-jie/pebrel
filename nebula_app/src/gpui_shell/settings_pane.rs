@@ -27,7 +27,6 @@ use gpui_component::select::{SelectEvent, SelectItem};
 use nebula_settings::{RuntimeSettings, ThemeName, format_hex_rgb, parse_hex_rgb, persist_keys};
 
 use design::GROUP_GAP;
-use setting_help::{SettingHelp, help};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,6 +52,7 @@ mod reset;
 mod scrolling;
 mod search_header;
 mod segmented;
+#[cfg(all(test, feature = "gpui-test-support"))]
 mod setting_help;
 mod terminal_effect;
 mod theme_picker;
@@ -128,7 +128,6 @@ pub struct SettingsPane {
     theme_package_seq: u64,
     theme_picker_trigger: FocusHandle,
     icon_picker_trigger: FocusHandle,
-    expanded_setting_help: std::collections::HashSet<&'static str>,
     about_update: AboutUpdateState,
     about_update_seq: u64,
     about_last_checked: Option<String>,
@@ -446,7 +445,7 @@ impl SettingsPane {
                 dialog,
                 window,
                 language.tr("settings.appearance.background_cover_title"),
-                SharedString::from(language.tr("settings.appearance.background_cover_description")),
+                "",
                 language.pick("开启", "Enable"),
                 language.pick("取消", "Cancel"),
                 ButtonVariant::Primary,
@@ -696,7 +695,6 @@ impl SettingsPane {
         &self,
         key: &'static str,
         label: &'static str,
-        desc: impl Into<SettingHelp>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let select = self.select_of(key);
@@ -713,14 +711,13 @@ impl SettingsPane {
             .w(px(SETTINGS_SELECT_WIDTH))
             .into_any_element()
         });
-        self.maybe_marked(key, label, desc, control, cx)
+        self.maybe_marked(key, label, control, cx)
     }
 
     fn shell_select_row(&self, cx: &Context<Self>) -> impl IntoElement {
         let language = crate::gpui_shell::config::ui_language(cx);
         self.row(
             language.pick("默认 Shell", "Default shell"),
-            help("shell", language),
             crate::gpui_shell::widgets::settings_select_frame(
                 "settings-shell-select",
                 Select::new(&self.shell_select).appearance(false).h_full().rounded(px(6.0)),
@@ -830,7 +827,6 @@ impl SettingsPane {
         &self,
         key: &'static str,
         label: &'static str,
-        desc: impl Into<SettingHelp>,
         checked: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -840,7 +836,7 @@ impl SettingsPane {
             }),
         );
         let control = div().debug_selector(move || format!("nebula-switch-{key}")).child(control);
-        self.maybe_marked(key, label, desc, control, cx)
+        self.maybe_marked(key, label, control, cx)
     }
 
     /// 接了默认值对照的键走带标记的行，其余走普通行。
@@ -851,7 +847,6 @@ impl SettingsPane {
         &self,
         key: &'static str,
         label: &'static str,
-        desc: impl Into<SettingHelp>,
         control: impl IntoElement,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
@@ -864,7 +859,6 @@ impl SettingsPane {
             Some((dirty, factory)) => self
                 .row_with_reset_layout(
                     label,
-                    desc,
                     dirty,
                     move |this, window, cx| {
                         if key == "scrollback_lines" {
@@ -890,9 +884,7 @@ impl SettingsPane {
                     cx,
                 )
                 .into_any_element(),
-            None => self
-                .row_shell(label, desc.into(), None, false, layout, control, cx)
-                .into_any_element(),
+            None => self.row_shell(label, None, false, layout, control, cx).into_any_element(),
         }
     }
 
@@ -916,7 +908,6 @@ impl SettingsPane {
         let color = if has_dir { cx.theme().link } else { cx.theme().muted_foreground };
         self.row(
             language.pick("启动目录", "Startup directory"),
-            help("startup_directory", language),
             h_flex()
                 .gap_2()
                 .items_center()
@@ -990,7 +981,6 @@ impl SettingsPane {
     fn input_row(
         &self,
         label: &'static str,
-        desc: &'static str,
         key: &'static str,
         input: &Entity<InputState>,
         cx: &mut Context<Self>,
@@ -998,7 +988,6 @@ impl SettingsPane {
         let state = input.clone();
         self.row(
             label,
-            desc,
             h_flex()
                 .gap_2()
                 .items_center()
@@ -1020,14 +1009,12 @@ impl SettingsPane {
     fn slider_row(
         &self,
         label: &'static str,
-        desc: impl Into<SettingHelp>,
         state: &Entity<SliderState>,
         display: SharedString,
         cx: &Context<Self>,
     ) -> impl IntoElement {
         self.row(
             label,
-            desc,
             h_flex()
                 .w(px(220.0))
                 .items_center()
@@ -1172,13 +1159,6 @@ impl SettingsPane {
             } else {
                 language.pick("背景图片", "Background image")
             },
-            if gif {
-                language.text(crate::i18n::Message::WallpaperGifDescription).into()
-            } else if video {
-                language.text(crate::i18n::Message::WallpaperVideoDescription).into()
-            } else {
-                help("background_image", language)
-            },
             has_image,
             |this, _, cx| {
                 this.media_picker_generation = this.media_picker_generation.wrapping_add(1);
@@ -1287,7 +1267,6 @@ impl SettingsPane {
                     group.child(self.switch_row(
                         "refresh_environment",
                         language.text(crate::i18n::Message::SettingsEnvironmentRefresh),
-                        language.text(crate::i18n::Message::SettingsEnvironmentRefreshDescription),
                         self.runtime.refresh_environment,
                         cx,
                     ))
@@ -1298,35 +1277,26 @@ impl SettingsPane {
             .child(self.switch_row(
                 "ai_toasts",
                 language.text(crate::i18n::Message::SettingsNotificationsAiMessages),
-                help("ai_toasts", language),
                 self.runtime.ai_toasts,
                 cx,
             ))
             .child(self.select_row(
                 "notification_duration",
                 language.text(crate::i18n::Message::SettingsNotificationsDuration),
-                help("notification_duration", language),
                 cx,
             ))
-            .child(self.select_row(
-                "bell",
-                language.pick("终端铃声", "Terminal bell"),
-                help("bell", language),
-                cx,
-            ));
+            .child(self.select_row("bell", language.pick("终端铃声", "Terminal bell"), cx));
         let completion = self
             .group(language.pick("补全", "Completion"), cx)
             .child(self.switch_row(
                 "ghost",
                 language.pick("启用命令补全", "Enable command completion"),
-                help("ghost", language),
                 self.runtime.ghost,
                 cx,
             ))
             .child(self.select_row(
                 "completion_style",
                 language.text(crate::i18n::Message::SettingsCompletionMode),
-                help("completion_style", language),
                 cx,
             ));
         v_flex().w_full().gap(px(GROUP_GAP)).child(terminal).child(completion).child(alerts)
@@ -1345,9 +1315,6 @@ impl SettingsPane {
                         self.switch_row(
                             "focus_follows_mouse",
                             language.text(crate::i18n::Message::SettingsMouseFocusFollowsMouse),
-                            language.text(
-                                crate::i18n::Message::SettingsMouseFocusFollowsMouseDescription,
-                            ),
                             cx.try_global::<crate::gpui_shell::config::Settings>()
                                 .is_some_and(|settings| settings.focus_follows_mouse),
                             cx,
@@ -1356,28 +1323,24 @@ impl SettingsPane {
                     .child(self.switch_row(
                         "copy_on_select",
                         language.pick("选中即复制", "Copy on select"),
-                        help("copy_on_select", language),
                         self.runtime.copy_on_select,
                         cx,
                     ))
                     .child(self.switch_row(
                         "multiline_paste_confirm",
                         language.pick("粘贴前确认", "Confirm pastes"),
-                        help("multiline_paste_confirm", language),
                         self.runtime.multiline_paste_confirm,
                         cx,
                     ))
                     .child(self.switch_row(
                         "panel_resize",
                         language.pick("拖拽调节侧栏宽度", "Drag to resize the sidebar"),
-                        help("panel_resize", language),
                         self.runtime.panel_resize,
                         cx,
                     ))
                     .child(self.switch_row(
                         "cjk_bold_regular",
                         language.pick("中日韩粗体提亮", "Brighten CJK bold"),
-                        help("cjk_bold_regular", language),
                         self.runtime.cjk_bold_regular,
                         cx,
                     )),
@@ -1387,31 +1350,26 @@ impl SettingsPane {
                     .child(self.select_row(
                         "tabs_position",
                         language.pick("标签栏位置", "Tab bar position"),
-                        help("tabs_position", language),
                         cx,
                     ))
                     .child(self.select_row(
                         "tab_reveal",
                         language.pick("标签展开动效", "Tab reveal animation"),
-                        help("tab_reveal", language),
                         cx,
                     ))
                     .child(self.select_row(
                         "new_tab_position",
                         language.pick("新标签位置", "New tab position"),
-                        help("new_tab_position", language),
                         cx,
                     ))
                     .child(self.select_row(
                         "windowing_behavior",
                         language.pick("新建实例行为", "New instance behavior"),
-                        help("windowing_behavior", language),
                         cx,
                     ))
                     .child(self.select_row(
                         "vcs_display",
                         language.pick("侧栏版本控制", "Sidebar version control"),
-                        help("vcs_display", language),
                         cx,
                     )),
             )
@@ -1427,7 +1385,6 @@ impl SettingsPane {
                 group.child(self.switch_row(
                     "launch_at_login",
                     language.text(crate::i18n::Message::SettingsStartupLaunchAtLogin),
-                    language.text(crate::i18n::Message::SettingsStartupLaunchAtLoginHelp),
                     self.launch_at_login,
                     cx,
                 ))
@@ -1436,7 +1393,6 @@ impl SettingsPane {
                 group.child(self.switch_row(
                     "silent_start",
                     language.text(crate::i18n::Message::SettingsStartupSilentStart),
-                    language.text(crate::i18n::Message::SettingsStartupSilentStartHelp),
                     self.runtime.silent_start,
                     cx,
                 ))
@@ -1448,7 +1404,6 @@ impl SettingsPane {
                         "关窗后保留后台会话",
                         "Keep sessions running after the window closes",
                     ),
-                    help("keep_session", language),
                     self.runtime.keep_session,
                     cx,
                 ))
@@ -1456,14 +1411,12 @@ impl SettingsPane {
             .child(self.switch_row(
                 "restore_session",
                 language.pick("启动时恢复上次标签", "Restore previous tabs at startup"),
-                help("restore_session", language),
                 self.runtime.restore_session,
                 cx,
             ))
             .child(self.switch_row(
                 "resume_ai",
                 language.pick("恢复时接续 AI 对话", "Resume AI conversations"),
-                help("resume_ai", language),
                 self.runtime.resume_ai,
                 cx,
             ))
@@ -1471,7 +1424,6 @@ impl SettingsPane {
                 group.child(self.switch_row(
                     "tray",
                     language.pick("常驻系统托盘图标", "Keep an icon in the system tray"),
-                    help("tray", language),
                     self.runtime.tray,
                     cx,
                 ))

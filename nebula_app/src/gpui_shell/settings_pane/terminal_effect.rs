@@ -91,7 +91,7 @@ impl SettingsPane {
                 dialog,
                 window,
                 language.text(Message::TerminalEffectConfirm),
-                SharedString::from(language.text(Message::TerminalEffectConfirmDescription)),
+                "",
                 language.text(Message::TerminalEffectEnable),
                 language.text(Message::WallpaperShaderCancel),
                 ButtonVariant::Primary,
@@ -213,11 +213,6 @@ impl SettingsPane {
             .collect::<Vec<_>>();
         let header = self.row_with_reset(
             language.text(Message::TerminalEffectTitle),
-            language.text(if available {
-                Message::TerminalEffectDescription
-            } else {
-                Message::TerminalEffectUnsupported
-            }),
             config.enabled || !config.paths.is_empty(),
             |this, window, cx| {
                 this.terminal_effect_picker.take();

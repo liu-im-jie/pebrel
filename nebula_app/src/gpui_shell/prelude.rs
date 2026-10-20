@@ -60,6 +60,9 @@ fn modal_dialog_width(window: &Window) -> f32 {
 }
 
 fn confirm_body_height(description: SharedString, window: &Window) -> f32 {
+    if description.is_empty() {
+        return 0.0;
+    }
     let available_width =
         (modal_dialog_width(window) - CONFIRM_DIALOG_HORIZONTAL_PADDING * 2.0).max(1.0);
     let text_style = window.text_style();
@@ -128,6 +131,9 @@ pub fn confirm_dialog(
         .overlay_closable(true)
         .title(div().text_lg().font_semibold().line_height(relative(1.0)).child(title))
         .content(move |content, _, _| {
+            if content_description.is_empty() {
+                return content;
+            }
             content.child(
                 DialogDescription::new()
                     .text_base()
@@ -270,7 +276,7 @@ mod tests {
             Root::new(view, window, cx)
         });
         cx.update(|window, _| {
-            assert_eq!(confirm_body_height("".into(), window), CONFIRM_DIALOG_BODY_LINE_HEIGHT);
+            assert_eq!(confirm_body_height("".into(), window), 0.0);
             assert_eq!(confirm_body_height("Host".into(), window), CONFIRM_DIALOG_BODY_LINE_HEIGHT);
             for description in ["Host\n\nFingerprint", "Host\r\n\r\nFingerprint"] {
                 assert_eq!(

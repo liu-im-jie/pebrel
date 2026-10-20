@@ -966,10 +966,7 @@ impl SettingsPane {
                     .icon(if open { IconName::ChevronUp } else { IconName::ChevronDown })
                     .ghost()
                     .xsmall()
-                    .tooltip(crate::gpui_shell::config::ui_language(cx).pick(
-                        "选择常用或最近使用的用户名",
-                        "Choose a common or recent username",
-                    ))
+                    .tooltip(language.pick("用户名", "Username"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.toggle_ssh_username_picker(window, cx);
                     }))),
@@ -1069,10 +1066,7 @@ impl SettingsPane {
                     .items_center()
                     .text_xs()
                     .text_color(theme.muted_foreground)
-                    .child(language.pick(
-                        "没有匹配项，可直接输入用户名",
-                        "No matches. Enter a username directly.",
-                    ))
+                    .child(language.text(Message::CommonNoMatches))
                     .into_any_element()
             } else {
                 v_flex()

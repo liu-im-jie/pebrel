@@ -16,7 +16,7 @@ impl SettingsPane {
                 dialog,
                 window,
                 language.text(Message::SettingsResetTitle),
-                language.text(Message::SettingsResetDescription),
+                "",
                 language.text(Message::CommonRestoreDefaults),
                 language.text(Message::CommonCancel),
                 ButtonVariant::Danger,

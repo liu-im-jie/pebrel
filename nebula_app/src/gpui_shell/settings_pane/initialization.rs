@@ -655,7 +655,6 @@ impl SettingsPane {
             theme_package_seq: 0,
             theme_picker_trigger: cx.focus_handle(),
             icon_picker_trigger: cx.focus_handle(),
-            expanded_setting_help: std::collections::HashSet::new(),
             about_update: AboutUpdateState::Idle,
             about_update_seq: 0,
             about_last_checked: None,

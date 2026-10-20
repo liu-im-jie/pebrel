@@ -608,21 +608,6 @@ impl SettingsPane {
                                 },
                             ))
                     }),
-            )
-            .child(
-                div()
-                    .w_full()
-                    .px(px(6.0))
-                    .text_center()
-                    .mt(px(if compact_preview { 9.0 } else { 20.0 }))
-                    .text_size(px(10.5))
-                    .line_height(gpui::relative(1.7))
-                    .text_color(colors.secondary)
-                    .child(if self.runtime.follow_system_theme {
-                        language.text(Message::ThemePickerManualHint)
-                    } else {
-                        language.text(Message::ThemePickerPreviewHint)
-                    }),
             );
         if compact {
             v_flex().w(px(width)).gap(px(20.0)).child(preview).child(grid_column)

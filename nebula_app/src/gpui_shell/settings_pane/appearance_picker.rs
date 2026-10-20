@@ -370,7 +370,7 @@ impl SettingsPane {
                 dialog,
                 window,
                 language.text(Message::ThemeEditorDiscardTitle),
-                language.text(Message::ThemePickerDiscardBody),
+                "",
                 language.text(Message::ThemeEditorDiscard),
                 language.text(Message::ThemeEditorKeepEditing),
                 ButtonVariant::Danger,
@@ -737,11 +737,6 @@ impl SettingsPane {
         } else {
             language.text(Message::ThemePickerIconTitle)
         };
-        let subtitle = if draft.is_theme() {
-            language.text(Message::ThemePickerDescription)
-        } else {
-            language.text(Message::ThemePickerIconDescription)
-        };
         let body = if draft.is_theme() {
             self.theme_picker_body(width - 2.0 - padding * 2.0, compact, window, cx)
         } else {
@@ -785,13 +780,7 @@ impl SettingsPane {
                             .flex_1()
                             .min_w_0()
                             .gap(px(5.0))
-                            .child(div().text_size(px(19.0)).font_semibold().child(title))
-                            .child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .text_color(colors.secondary)
-                                    .child(subtitle),
-                            ),
+                            .child(div().text_size(px(19.0)).font_semibold().child(title)),
                     )
                     .child(
                         Button::new("close-appearance-picker")

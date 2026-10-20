@@ -362,12 +362,6 @@ impl SettingsPane {
                     .font_semibold()
                     .child(language.text(Message::ThemeEditorBackgroundEffects)),
             )
-            .child(
-                div()
-                    .text_size(px(13.0))
-                    .text_color(colors.secondary)
-                    .child(language.text(Message::ThemeEditorBackgroundEffectsDescription)),
-            )
             .child(input(
                 "theme-editor-image-path",
                 language.text(Message::ThemeEditorImagePath),

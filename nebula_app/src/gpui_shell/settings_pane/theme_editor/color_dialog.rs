@@ -35,7 +35,7 @@ impl SettingsPane {
                 dialog,
                 window,
                 language.text(title),
-                language.text(Message::ThemeEditorPreviewOnly),
+                "",
                 language.text(Message::ThemeTransferCompleted),
                 language.text(Message::ThemePickerCancel),
                 ButtonVariant::Primary,
@@ -155,12 +155,6 @@ impl SettingsPane {
             .on_mouse_up_out(MouseButton::Left, move |_, _, cx| {
                 stop_editor_color_drag(&out_pane, sequence, cx);
             })
-            .child(
-                div()
-                    .text_size(px(11.0))
-                    .text_color(colors.secondary)
-                    .child(language.text(Message::ThemeEditorPreviewOnly)),
-            )
             .child(sv)
             .child(hue)
             .child(

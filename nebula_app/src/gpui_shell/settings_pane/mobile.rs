@@ -545,7 +545,7 @@ impl SettingsPane {
                 dialog,
                 window,
                 language.format(Message::MobileRemoveTitle, &[("name", &name)]),
-                language.text(Message::MobileRemoveDescription),
+                "",
                 language.text(Message::MobileRemove),
                 language.text(Message::CommonCancel),
                 ButtonVariant::Danger,

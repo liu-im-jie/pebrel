@@ -41,14 +41,6 @@ pub(super) fn editor_field(label: &'static str, control: impl IntoElement) -> gp
         .child(control)
 }
 
-pub(super) fn editor_hint(text: impl Into<SharedString>, cx: &gpui::App) -> gpui::Div {
-    div()
-        .text_xs()
-        .line_height(gpui::relative(1.6))
-        .text_color(cx.theme().muted_foreground)
-        .child(text.into())
-}
-
 impl SettingsPane {
     pub(in crate::gpui_shell) fn ssh_editor_modal(
         &mut self,
@@ -175,25 +167,9 @@ impl SettingsPane {
                                         .gap_3()
                                         .items_center()
                                         .child(avatar)
-                                        .child(
-                                            v_flex()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .gap_1()
-                                                .child(
-                                                    div()
-                                                        .text_size(px(19.0))
-                                                        .font_semibold()
-                                                        .child(title),
-                                                )
-                                                .child(editor_hint(
-                                                    language.pick(
-                                                        "配置连接信息，随时快速访问。",
-                                                        "Save connection details for quick access.",
-                                                    ),
-                                                    cx,
-                                                )),
-                                        )
+                                        .child(v_flex().flex_1().min_w_0().gap_1().child(
+                                            div().text_size(px(19.0)).font_semibold().child(title),
+                                        ))
                                         .child(
                                             Button::new("ssh-editor-close")
                                                 .icon(IconName::Close)
@@ -348,23 +324,14 @@ impl SettingsPane {
         });
         let port_error = matches!(validation, Some(SshValidationError::InvalidPort));
         let address_error = validation.is_some() && !port_error;
-        let destination = self.ssh_destination_from_draft(cx).ok();
         v_flex()
             .w_full()
             .child(
                 v_flex()
                     .gap(px(7.0))
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_medium()
-                                    .child(language.pick("主机名称", "Host name")),
-                            )
-                            .child(editor_hint(language.pick("可选", "Optional"), cx)),
-                    )
+                    .child(h_flex().gap_2().child(
+                        div().text_xs().font_medium().child(language.pick("主机名称", "Host name")),
+                    ))
                     .child(editor_input(
                         &self.ssh_label_input,
                         language.pick("主机名称", "Host name"),
@@ -403,16 +370,12 @@ impl SettingsPane {
                         )),
                     ),
             )
-            .child(editor_hint(language.tr("settings.ssh.address_hint"), cx).mt_1())
             .when_some(validation, |body, error| {
                 body.child(
                     div().mt_1().text_xs().text_color(theme.danger).child(error.text(language)),
                 )
             })
             .child(div().mt_4().child(editor_field(language.pick("用户名", "Username"), username)))
-            .when_some(destination, |body, destination| {
-                body.child(editor_hint(destination, cx).mt_2().truncate())
-            })
             .child(
                 v_flex()
                     .mt_5()
@@ -579,21 +542,7 @@ impl SettingsPane {
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.add_ssh_private_key(SshKeyTarget::Host, window, cx)
                                 })),
-                        )
-                        .child(editor_hint(language.tr("settings.ssh.default_keys"), cx)),
-                )
-            })
-            .when(!shows_password && !shows_keys, |body| {
-                body.child(
-                    editor_hint(
-                        language.tr(if editor.auth == SshAuthMode::Auto {
-                            "settings.ssh.auth_auto_description"
-                        } else {
-                            "settings.ssh.auth_interactive_description"
-                        }),
-                        cx,
-                    )
-                    .mt_4(),
+                        ),
                 )
             })
     }

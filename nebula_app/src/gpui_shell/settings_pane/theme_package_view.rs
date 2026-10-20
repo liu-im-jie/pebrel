@@ -86,12 +86,6 @@ impl SettingsPane {
                         )),
                 )
                 .child(
-                    div()
-                        .text_size(px(13.0))
-                        .text_color(colors.secondary)
-                        .child(language.text(Message::ThemePackageMetadataHint)),
-                )
-                .child(
                     v_flex()
                         .gap(px(8.0))
                         .child(
@@ -158,26 +152,19 @@ impl SettingsPane {
                         ),
                 );
         } else if mode == Mode::Import && !done {
-            body = body
-                .child(
-                    Button::new("theme-package-source-choose")
-                        .debug_selector(|| "theme-package-source-choose".to_owned())
-                        .label(language.text(Message::ThemePackageChooseFile))
-                        .outline()
-                        .rounded(px(6.0))
-                        .h(px(32.0))
-                        .px(px(12.0))
-                        .disabled(busy)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.choose_package_file(false, window, cx)
-                        })),
-                )
-                .child(
-                    div()
-                        .text_size(px(13.0))
-                        .text_color(colors.secondary)
-                        .child(language.text(Message::ThemePackageImportHint)),
-                );
+            body = body.child(
+                Button::new("theme-package-source-choose")
+                    .debug_selector(|| "theme-package-source-choose".to_owned())
+                    .label(language.text(Message::ThemePackageChooseFile))
+                    .outline()
+                    .rounded(px(6.0))
+                    .h(px(32.0))
+                    .px(px(12.0))
+                    .disabled(busy)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.choose_package_file(false, window, cx)
+                    })),
+            );
             if let Some(checked) = &state.inspected {
                 let manifest = &checked.manifest;
                 body = body.child(super::theme_picker::theme_definition_sample(
@@ -333,20 +320,12 @@ impl SettingsPane {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(|_, _, cx| cx.stop_propagation())
             .child(
-                v_flex()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .text_size(px(22.0))
-                            .font_semibold()
-                            .child(language.text(Message::ThemePackageTitle)),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(13.0))
-                            .text_color(colors.secondary)
-                            .child(language.text(Message::ThemePackageDescription)),
-                    ),
+                v_flex().gap(px(8.0)).child(
+                    div()
+                        .text_size(px(22.0))
+                        .font_semibold()
+                        .child(language.text(Message::ThemePackageTitle)),
+                ),
             )
             .child(tabs)
             .child(

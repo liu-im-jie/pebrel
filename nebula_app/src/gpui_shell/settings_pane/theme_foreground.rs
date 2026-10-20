@@ -231,7 +231,7 @@ impl SettingsPane {
                 dialog,
                 window,
                 language.text(Message::ThemePickerColorTitle),
-                language.text(Message::ThemePickerColorHint),
+                "",
                 language.text(Message::ThemeTransferCompleted),
                 language.text(Message::ThemePickerCancel),
                 ButtonVariant::Primary,
@@ -597,14 +597,7 @@ impl SettingsPane {
                         .child(language.text(Message::ThemePickerInvalidColor)),
                 )
             })
-            .child(swatches)
-            .child(
-                div()
-                    .text_size(px(11.0))
-                    .line_height(gpui::relative(1.6))
-                    .text_color(dialog_text_color.opacity(0.75))
-                    .child(language.text(Message::ThemePickerColorHint)),
-            );
+            .child(swatches);
 
         body
     }
