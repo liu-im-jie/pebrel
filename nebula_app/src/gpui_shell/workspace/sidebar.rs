@@ -5,6 +5,87 @@ use crate::i18n::Message;
 /// 折叠箭头的固定布局槽。图标是 SVG，不应借任一字体的 advance 决定留白。
 const TABS_DISCLOSURE_SLOT_W: f32 = 24.0;
 
+pub(super) fn section_header(
+    id: &'static str,
+    title: &'static str,
+    count: Option<usize>,
+    collapsed: bool,
+    density: nebula_settings::DensityName,
+    cx: &App,
+) -> gpui::Stateful<gpui::Div> {
+    let theme = cx.theme();
+    let label_px = cx
+        .try_global::<crate::gpui_shell::config::Settings>()
+        .map(|settings| settings.ui_font_size_px)
+        .unwrap_or(15.0);
+    let muted = theme.muted_foreground;
+    let hover = theme.list_hover;
+    h_flex()
+        .id(id)
+        .debug_selector(move || id.to_owned())
+        .focusable()
+        .tab_stop(true)
+        .role(gpui::Role::Button)
+        .w_full()
+        .h(px(tab_scroll::tab_row_height(density)))
+        .flex_shrink_0()
+        .pb_1()
+        .pl_2()
+        .items_center()
+        .cursor_pointer()
+        .rounded_md()
+        .hover(move |row| row.bg(hover))
+        .active(move |row| row.bg(hover))
+        .focus_visible(move |row| row.bg(hover))
+        .child(
+            h_flex()
+                .h_full()
+                .items_center()
+                .font_family(theme.font_family.clone())
+                .pr_1()
+                .child(
+                    h_flex()
+                        .w(px(TABS_DISCLOSURE_SLOT_W))
+                        .h_full()
+                        .flex_shrink_0()
+                        .items_center()
+                        .child(
+                            Icon::new(if collapsed {
+                                IconName::ChevronRight
+                            } else {
+                                IconName::ChevronDown
+                            })
+                            .xsmall()
+                            .text_color(muted),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(px(label_px * SIDEBAR_TITLE_SCALE))
+                        .font_weight(FontWeight::NORMAL)
+                        .text_color(muted)
+                        .child(title),
+                )
+                .when_some(count, |header, count| {
+                    header.child(
+                        h_flex()
+                            .ml_2()
+                            .h(px((label_px * 1.22 * SIDEBAR_TITLE_SCALE * 1.18).max(11.0)))
+                            .min_w(px(label_px * 0.62 + 8.0))
+                            .px_2()
+                            .justify_center()
+                            .items_center()
+                            .rounded_full()
+                            .bg(theme.muted)
+                            .text_size(px(label_px * SIDEBAR_TITLE_SCALE))
+                            .font_weight(FontWeight::NORMAL)
+                            .text_color(crate::gpui_shell::theme::faint_ink(cx))
+                            .child(count.to_string()),
+                    )
+                }),
+        )
+}
+
 /// `SidebarActivity::WaitingInput` / `Attention` 共用的字位：Nerd Font
 /// `nf-fa-hand_paper_o`（开掌）。已核对打包字体
 /// `assets/fonts/MapleMonoNormal-NF-CN-Regular.ttf` 的 cmap 覆盖这个码位；换字体
@@ -192,9 +273,6 @@ impl NebulaWorkspace {
         let row_pitch = self.tab_row_pitch();
         let theme = cx.theme();
         let muted = theme.muted_foreground;
-        // 数量 chip 数字：旧壳独用 ink_faint（比 ink_dim 再暗一档），chip 背
-        // 景 surface 洗色不变——数字不该和标题抢层级。
-        let faint = crate::gpui_shell::theme::faint_ink(cx);
         let active_bg = theme.sidebar_accent;
         let active_fg = theme.sidebar_accent_foreground;
         let hover_bg = theme.list_hover;
@@ -619,9 +697,9 @@ impl NebulaWorkspace {
             .collect::<Vec<_>>();
 
         let header_group: SharedString = "sidebar-tabs-header-hover".into();
-        let count: SharedString = self.tabs.len().to_string().into();
 
         let sidebar = v_flex()
+            .debug_selector(|| "workspace-sidebar".to_owned())
             .w(px(self.sidebar_width))
             .h_full()
             .flex_shrink_0()
@@ -639,76 +717,24 @@ impl NebulaWorkspace {
                 this.update_tab_drag(event, window, cx);
             }))
             .child(
-                h_flex()
-                    .id("sidebar-tabs-toggle")
+                section_header(
+                    "sidebar-tabs-toggle",
+                    "TABS",
+                    Some(self.tabs.len()),
+                    self.tabs_section_collapsed,
+                    self.density,
+                    cx,
+                )
                     .group(header_group.clone())
-                    .w_full()
-                    .h(px(row_height))
-                    .pb_1()
-                    // 旧壳标题文字从 panel_x + 16px 起；侧栏根已有 8px
-                    // padding，这里再补 8px，箭头不会贴住左边缘。
-                    .pl_2()
-                    .items_center()
-                    .cursor_pointer()
-                    // `ChromeHit::TabsSection` 命中整条 tabs_header。监听必须
-                    // 挂在标题行根节点，右侧空白区同样可以折叠，而不是只有
-                    // 箭头、标题和数量这一小段能点。
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                        if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                            cx.stop_propagation();
+                            this.toggle_tabs_section(cx);
+                        }
+                    }))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.toggle_tabs_section(cx);
                     }))
-                    .child(
-                        // 箭头、TABS 和计数仍作为一个排版段；折叠命中已经
-                        // 提升到外层整行。右侧 +/⋯ 自己停止冒泡。
-                        h_flex()
-                            .h_full()
-                            .items_center()
-                            .font_family(chrome_family.clone())
-                            .pr_1()
-                            .child(
-                                // 折叠三角用组件库线性 Chevron（lucide 细线），
-                                // 不再用 Nerd Font 实心字位——后者在侧栏标题
-                                // 上偏重、和右侧 +/⋯ 的 SVG 不一套语言。
-                                h_flex()
-                                    .w(px(TABS_DISCLOSURE_SLOT_W))
-                                    .h_full()
-                                    .flex_shrink_0()
-                                    .items_center()
-                                    .child(
-                                        Icon::new(if self.tabs_section_collapsed {
-                                            IconName::ChevronRight
-                                        } else {
-                                            IconName::ChevronDown
-                                        })
-                                        .xsmall()
-                                        .text_color(muted),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(label_px * SIDEBAR_TITLE_SCALE))
-                                    .font_weight(FontWeight::NORMAL)
-                                    .text_color(muted)
-                                    .child("TABS"),
-                            )
-                            .child(
-                                // chip 尺寸贴旧壳公式：h = max(cell_h×0.82×1.18, 11)
-                                // ≈ 18-19px（不是 22），1 位数宽 max(adv+8, h×1.25)。
-                                // 数字 ink_faint。
-                                h_flex()
-                                    .ml_2()
-                                    .h(px((label_px * 1.22 * SIDEBAR_TITLE_SCALE * 1.18).max(11.0)))
-                                    .min_w(px(label_px * 0.62 + 8.0))
-                                    .px_2()
-                                    .justify_center()
-                                    .items_center()
-                                    .rounded_full()
-                                    .bg(theme.muted)
-                                    .text_size(px(label_px * SIDEBAR_TITLE_SCALE))
-                                    .font_weight(FontWeight::NORMAL)
-                                    .text_color(faint)
-                                    .child(count),
-                            ),
-                    )
                     .child(div().flex_1())
                     .child(
                         h_flex()
@@ -765,7 +791,20 @@ impl NebulaWorkspace {
                             ),
                     ),
             )
-            .child(self.render_tabs_section(items, cx));
+            .child(self.render_tabs_section(items, cx))
+            .child(
+                v_flex()
+                    .id("sidebar-ssh-section")
+                    .debug_selector(|| "sidebar-ssh-section".to_owned())
+                    .w_full()
+                    .min_h_0()
+                    .flex_shrink_0()
+                    .mt_auto()
+                    .gap(px(tab_scroll::tab_row_gap(self.density)))
+                    .when(self.ssh_sidebar.expanded(), |section| section.h(relative(1.0 / 3.0)))
+                    .child(self.render_ssh_sidebar_header(cx))
+                    .children(self.render_ssh_sidebar_list(cx)),
+            );
         self.spinner_visible.set(items_running.get());
         if items_running.get() {
             self.arm_activity_spinner_frame(window, cx);
@@ -797,9 +836,8 @@ impl NebulaWorkspace {
         cx.notify();
     }
 
-    /// Tab 列表槽位。展开时列表是侧栏 `v_flex` 的 `flex_1` 子项，视口等于
-    /// 面板剩余高度（旧壳 `tabs_avail`）。折叠动画只按**上次量到的剩余
-    /// 高度**卷帘，绝不按全部行高，也不把裁剪高度写回窗口。
+    /// Tab 列表按内容高度封顶，只使用底部 SSH 区域以外的剩余空间。
+    /// 折叠动画只按上次量到的视口高度卷帘，不把裁剪高度写回滚动窗口。
     fn render_tabs_section<I>(&self, items: I, cx: &mut Context<Self>) -> gpui::AnyElement
     where
         I: IntoIterator,
@@ -807,7 +845,20 @@ impl NebulaWorkspace {
     {
         let collapsed = self.tabs_section_collapsed;
         let list =
-            self.wrap_tabs_scroll_list(items.into_iter().map(|item| item.into_any_element()), cx);
+            v_flex()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .max_h(px(tab_scroll::rows_h(
+                    self.tabs.len(),
+                    self.tab_row_pitch(),
+                    tab_scroll::tab_row_gap(self.density),
+                )))
+                .child(self.wrap_tabs_scroll_list(
+                    items.into_iter().map(|item| item.into_any_element()),
+                    cx,
+                ))
+                .into_any_element();
         if collapsed && !self.tabs_fold_frozen {
             return div().into_any_element();
         }

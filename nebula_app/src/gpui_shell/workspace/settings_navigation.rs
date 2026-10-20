@@ -134,6 +134,7 @@ impl NebulaWorkspace {
         }
         self.settings_open = false;
         self.sync_settings_layout(tab_reveal_instant(cx));
+        self.refresh_ssh_sidebar(window, cx);
         let restore_panel = std::mem::take(&mut self.settings_restore_side_panel_open);
         if restore_panel && !self.side_panel.open {
             self.toggle_side_panel(self.side_panel.view, cx);
